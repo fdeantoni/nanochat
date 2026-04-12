@@ -143,7 +143,16 @@ science_text = r"""
 Photosynthesis is a photochemical energy transduction process in which light-harvesting pigment–protein complexes within the thylakoid membranes of oxygenic phototrophs absorb photons and initiate charge separation at the reaction center, driving the linear electron transport chain from water to NADP⁺ via photosystem II, the cytochrome b₆f complex, and photosystem I, concomitantly generating a trans-thylakoid proton motive force utilized by chloroplastic ATP synthase. The light-dependent reactions produce ATP and NADPH, which fuel the Calvin–Benson–Bassham cycle in the stroma, wherein ribulose-1,5-bisphosphate is carboxylated by ribulose-1,5-bisphosphate carboxylase/oxygenase (RuBisCO) to form 3-phosphoglycerate, subsequently reduced and regenerated through a series of enzymatic steps, enabling net assimilation of CO₂ into triose phosphates and ultimately carbohydrates. This process is tightly regulated by photoprotective mechanisms, redox feedback, and metabolite flux, representing a central biochemical pathway coupling solar energy capture to the biosphere’s primary productivity.
 """.strip()
 
-# The tokenizer was trained on data from earlier shards, so it has seen this data
+# 19th-century Dutch prose — representative of the Babbelaar training corpus.
+# Source: Multatuli, "Max Havelaar" (1860), public domain.
+dutch_text = """
+De pakhuismeester van de firma Last & Co., koffi-makelaars te Amsterdam, heet Batavus Droogstoppel.
+Ik ben makelaar in koffi, en woon op de Lauriergracht, No 37. Het is mijn gewoonte niet, romans te schrijven of zulke dingen, en het heeft dan ook lang geduurd, eer ik er toe overging, een zoogenaamd boek te leveren. Ik heb er geen aanleg voor: ik houd van de werkelijkheid. In mijn vak behoef ik nimmermeer te liegen, want een monster koffi kan altijd nagezien worden op zuiverheid en gehalte.
+Maar er zijn twee redenen die my noopten, mijn gewone bezigheden te verlaten en te schrijven. De eerste is, dat ik geloof dat ik een roeping heb tot verbetering van ‘s menschen zede; de tweede, dat mijn kassier mij er op wees, dat er tegenwoordig overal romans geschreven worden, en dat zulke boeken voordeel afwerpen, mits men ze goed weet te verkoopen.
+Ik heb mij dus op raad van Frits — mijn oudsten zoon, die dikwijls uitdrukkingen uit fransche romans gebruikt, welke ik niet altijd begrijp — gezet aan dit werk, en ik zal er voor zorgen dat het degelijk en nuttig zij.
+""".strip()
+
+# The tokenizer was trained on data from the Babbelaar corpus (Delpher, DBNL, etc.)
 train_docs = next(parquets_iter_batched(split="train"))
 train_text = "\n".join(train_docs)
 val_docs = next(parquets_iter_batched(split="val"))
@@ -155,10 +164,11 @@ all_text = [
     ("code", code_text),
     ("math", math_text),
     ("science", science_text),
-    ("fwe-train", train_text),
+    ("dutch-19c", dutch_text),
+    ("bbl-train", train_text),
 ]
 if val_text:
-    all_text.append(("fwe-val", val_text))
+    all_text.append(("bbl-val", val_text))
 
 # Try out current default compared to GPT-2 and GPT-4 tokenizers
 tokenizer_results = {}
