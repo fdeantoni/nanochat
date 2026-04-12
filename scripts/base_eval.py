@@ -228,13 +228,14 @@ def main():
         print0("="*80)
         if ddp_rank == 0:
             prompts = [
-                "The capital of France is",
-                "The chemical symbol of gold is",
-                "If yesterday was Friday, then tomorrow will be",
-                "The opposite of hot is",
-                "The planets of the solar system are:",
-                "My favorite color is",
-                "If 5*x + 3 = 13, then x is",
+                # 19th-century Dutch prose continuations
+                "De vergadering werd geopend door den voorzitter, die",
+                "Men verneemt uit goede bron, dat de regeering voornemens is",
+                "De oogst was dit jaar bijzonder",
+                "Gisteren avond had er op de Markt eene",
+                "Het schip vertrok gisteren uit de haven van Rotterdam met bestemming naar",
+                "In de laatste vergadering van den gemeenteraad werd besloten",
+                "De predikant sprak over de noodzakelijkheid van",
             ]
             engine = Engine(model, tokenizer)
             print0("\nConditioned samples:")
