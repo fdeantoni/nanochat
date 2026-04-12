@@ -24,13 +24,22 @@ BASE_URL = "https://huggingface.co/datasets/karpathy/climbmix-400b-shuffle/resol
 MAX_SHARD = 6542 # the last datashard is shard_06542.parquet
 index_to_filename = lambda index: f"shard_{index:05d}.parquet" # format of the filenames
 base_dir = get_base_dir()
-DATA_DIR = os.path.join(base_dir, "base_data_climbmix")
+# NANOCHAT_DATA_DIR overrides the default data location, useful for custom
+# corpora (e.g. Babbelaar) that live outside ~/.cache/nanochat.
+DATA_DIR = os.environ.get("NANOCHAT_DATA_DIR", os.path.join(base_dir, "base_data_climbmix"))
 
 # -----------------------------------------------------------------------------
 # These functions are useful utilities to other modules, can/should be imported
 
-def list_parquet_files(data_dir=None, warn_on_legacy=False):
-    """ Looks into a data dir and returns full paths to all parquet files. """
+def list_parquet_files(data_dir=None, split=None, warn_on_legacy=False):
+    """ Looks into a data dir and returns full paths to all parquet files.
+
+    When *split* is given ("train" or "val"), the function first checks whether
+    the directory uses split-prefixed filenames (``train-*.parquet`` /
+    ``validation-*.parquet``).  If so it returns only the matching files.
+    Otherwise it falls back to the original nanochat convention where the
+    last sorted file is validation and all others are training.
+    """
     data_dir = DATA_DIR if data_dir is None else data_dir
 
     # Legacy-supporting code due to the upgrade from FinewebEdu-100B to ClimbMix-400B
@@ -61,6 +70,23 @@ def list_parquet_files(data_dir=None, warn_on_legacy=False):
         f for f in os.listdir(data_dir)
         if f.endswith('.parquet') and not f.endswith('.tmp')
     ])
+
+    if split is not None:
+        # Detect split-prefixed naming (e.g. Babbelaar: train-00000-of-00066.parquet)
+        has_split_names = any(
+            f.startswith('train-') or f.startswith('validation-')
+            for f in parquet_files
+        )
+        if has_split_names:
+            prefix = 'train-' if split == 'train' else 'validation-'
+            parquet_files = [f for f in parquet_files if f.startswith(prefix)]
+        else:
+            # Original nanochat convention: last file is val, rest are train
+            if split == 'train':
+                parquet_files = parquet_files[:-1]
+            else:  # val
+                parquet_files = parquet_files[-1:]
+
     parquet_paths = [os.path.join(data_dir, f) for f in parquet_files]
     return parquet_paths
 
@@ -71,8 +97,7 @@ def parquets_iter_batched(split, start=0, step=1):
     - start/step are useful for skipping rows in DDP. e.g. start=rank, step=world_size
     """
     assert split in ["train", "val"], "split must be 'train' or 'val'"
-    parquet_paths = list_parquet_files()
-    parquet_paths = parquet_paths[:-1] if split == "train" else parquet_paths[-1:]
+    parquet_paths = list_parquet_files(split=split)
     for filepath in parquet_paths:
         pf = pq.ParquetFile(filepath)
         for rg_idx in range(start, pf.num_row_groups, step):
