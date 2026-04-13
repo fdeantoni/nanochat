@@ -3,14 +3,17 @@
 # pretraining, and SFT on a CPU or MPS (Apple Silicon) box using a tiny model.
 #
 # Usage:
-#   bash runs/runbabbelaar.sh
+#   bash runs/babbelaar_smoketest.sh
 #
 # Optional env vars:
 #   NANOCHAT_DATA_DIR  — path to a directory already containing Babbelaar
 #                        Parquet shards.  If set and the directory has files,
 #                        the download step is skipped entirely.
-#   SFT_TRAIN_FILE     — path to sft_train.jsonl produced by step 150.
-#   SFT_VAL_FILE       — path to sft_val.jsonl produced by step 150.
+#   SFT_TRAIN_FILE     — path to sft_train.jsonl.  If unset, the script
+#                        downloads sft_train.jsonl + sft_val.jsonl from
+#                        fdeantoni/max-babbelaar-sft automatically.
+#   SFT_VAL_FILE       — path to sft_val.jsonl (auto-set alongside SFT_TRAIN_FILE
+#                        when downloaded).
 #   WANDB_RUN          — wandb run name ('dummy' disables logging, the default).
 #
 # This run is NOT expected to produce a capable model — it just verifies that
@@ -60,14 +63,15 @@ python -m scripts.base_train \
     --num-iterations=300 \
     --run=$WANDB_RUN
 
-# ── SFT ───────────────────────────────────────────────────────────────────────
+# ── SFT files ─────────────────────────────────────────────────────────────────
+# Auto-download from fdeantoni/max-babbelaar-sft if SFT_TRAIN_FILE is not set.
+SFT_DIR="./data/sft"
 if [ -z "$SFT_TRAIN_FILE" ]; then
-    echo ""
-    echo "SFT_TRAIN_FILE is not set — skipping SFT step."
-    echo "To run SFT, set SFT_TRAIN_FILE (and optionally SFT_VAL_FILE) and re-run."
-    echo "  export SFT_TRAIN_FILE=/path/to/sft_train.jsonl"
-    echo "  export SFT_VAL_FILE=/path/to/sft_val.jsonl"
-    exit 0
+    python -m nanochat.dataset --sft --sft-dir "$SFT_DIR"
+    export SFT_TRAIN_FILE="$(pwd)/${SFT_DIR#./}/sft_train.jsonl"
+    export SFT_VAL_FILE="$(pwd)/${SFT_DIR#./}/sft_val.jsonl"
+    echo "SFT_TRAIN_FILE set to $SFT_TRAIN_FILE"
+    echo "SFT_VAL_FILE set to $SFT_VAL_FILE"
 fi
 
 SFT_VAL_ARGS=""
@@ -75,6 +79,7 @@ if [ -n "$SFT_VAL_FILE" ]; then
     SFT_VAL_ARGS="--sft-val-file $SFT_VAL_FILE"
 fi
 
+# ── SFT ───────────────────────────────────────────────────────────────────────
 python -m scripts.chat_sft \
     --sft-file "$SFT_TRAIN_FILE" \
     $SFT_VAL_ARGS \

@@ -4,14 +4,16 @@ Parquet dataset utilities for Babbelaar pretraining.
 Parquet shards live in the directory pointed to by NANOCHAT_DATA_DIR.
 Files must use split-prefixed naming: train-*.parquet / validation-*.parquet.
 
-To download a subset of the dataset from HuggingFace (e.g. for a smoke test):
+To download a subset of the pretraining corpus from HuggingFace:
 
-    python -m nanochat.dataset --num-train-shards 3
+    python -m nanochat.dataset --num-train-shards 3   # smoke test: ~600 MB
+    python -m nanochat.dataset                         # full corpus: ~14 GB
 
-Omit --num-train-shards to download all shards (~14 GB).
-All validation shards are always downloaded.
-If NANOCHAT_DATA_DIR already contains sufficient Parquet files the download
-is skipped entirely.
+To download the SFT files:
+
+    python -m nanochat.dataset --sft --sft-dir ./data/sft
+
+All validation shards are always downloaded. Files already present are skipped.
 """
 
 import os
@@ -24,6 +26,10 @@ DEFAULT_LOCAL_DIR = "./data/all"
 
 NUM_TRAIN_SHARDS = 66
 NUM_VAL_SHARDS = 4
+
+HF_SFT_REPO_ID = "fdeantoni/max-babbelaar-sft"
+SFT_FILES = ["sft_train.jsonl", "sft_val.jsonl"]
+DEFAULT_SFT_DIR = "./data/sft"
 
 # NANOCHAT_DATA_DIR must be set to the directory containing the Parquet shards.
 DATA_DIR = os.environ.get("NANOCHAT_DATA_DIR")
@@ -144,6 +150,55 @@ def download(local_dir=DEFAULT_LOCAL_DIR, num_train_shards=None):
     _print_export(local_dir)
 
 
+def download_sft(sft_dir=DEFAULT_SFT_DIR):
+    """Download SFT JSONL files from HuggingFace Hub into *sft_dir*.
+
+    Downloads ``sft_train.jsonl`` and ``sft_val.jsonl`` from
+    ``fdeantoni/max-babbelaar-sft``. Files already present are skipped.
+    """
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        raise SystemExit(
+            "huggingface_hub is not installed.\n"
+            "Install it with:  pip install huggingface_hub"
+        )
+
+    os.makedirs(sft_dir, exist_ok=True)
+
+    already = set(os.listdir(sft_dir))
+    missing = [f for f in SFT_FILES if f not in already]
+
+    if not missing:
+        print(f"All SFT files already present in {sft_dir} — nothing to download.")
+        _print_sft_export(sft_dir)
+        return
+
+    present = len(SFT_FILES) - len(missing)
+    print(f"{present} SFT file(s) already present; downloading {len(missing)} missing file(s) from {HF_SFT_REPO_ID}...")
+
+    for filename in missing:
+        dest = os.path.join(sft_dir, filename)
+        print(f"  {filename}")
+        hf_hub_download(
+            repo_id=HF_SFT_REPO_ID,
+            repo_type="dataset",
+            filename=filename,
+            local_dir=sft_dir,
+            local_dir_use_symlinks=False,
+        )
+
+    print(f"\nDone — SFT files in {sft_dir}")
+    _print_sft_export(sft_dir)
+
+
+def _print_sft_export(sft_dir):
+    abs_dir = os.path.abspath(sft_dir)
+    print(f"\nSet the SFT file paths before fine-tuning:")
+    print(f"  export SFT_TRAIN_FILE={abs_dir}/sft_train.jsonl")
+    print(f"  export SFT_VAL_FILE={abs_dir}/sft_val.jsonl")
+
+
 def _print_export(local_dir):
     abs_dir = os.path.abspath(local_dir)
     print(f"\nSet the data directory before training:")
@@ -152,12 +207,12 @@ def _print_export(local_dir):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description=f"Download the Babbelaar pretraining corpus from {HF_REPO_ID}"
+        description=f"Download the Babbelaar pretraining corpus or SFT files from HuggingFace"
     )
     parser.add_argument(
         "--local-dir",
         default=DEFAULT_LOCAL_DIR,
-        help=f"destination directory (default: {DEFAULT_LOCAL_DIR})",
+        help=f"destination directory for Parquet shards (default: {DEFAULT_LOCAL_DIR})",
     )
     parser.add_argument(
         "--num-train-shards",
@@ -166,5 +221,18 @@ if __name__ == "__main__":
         help=f"number of train shards to download (default: all {NUM_TRAIN_SHARDS}); "
              "all validation shards are always downloaded",
     )
+    parser.add_argument(
+        "--sft",
+        action="store_true",
+        help=f"download SFT JSONL files from {HF_SFT_REPO_ID} instead of Parquet shards",
+    )
+    parser.add_argument(
+        "--sft-dir",
+        default=DEFAULT_SFT_DIR,
+        help=f"destination directory for SFT files (default: {DEFAULT_SFT_DIR})",
+    )
     args = parser.parse_args()
-    download(args.local_dir, args.num_train_shards)
+    if args.sft:
+        download_sft(args.sft_dir)
+    else:
+        download(args.local_dir, args.num_train_shards)
