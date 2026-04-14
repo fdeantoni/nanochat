@@ -4,8 +4,8 @@ Parquet dataset utilities for Babbelaar pretraining.
 Parquet shards live in the directory pointed to by NANOCHAT_DATA_DIR.
 Files must use split-prefixed naming: train-*.parquet / validation-*.parquet.
 
-By default files are stored in ~/.cache/nanochat/base_data_babbelaar (same
-convention as upstream nanochat). Override with NANOCHAT_DATA_DIR.
+By default files are stored in ~/.cache/nanochat/base_data_babbelaar/data/all.
+Override with NANOCHAT_DATA_DIR.
 SFT files default to ~/.cache/nanochat/sft_data_babbelaar. Override with NANOCHAT_SFT_DIR.
 
 To download a subset of the pretraining corpus from HuggingFace:
@@ -28,7 +28,7 @@ from nanochat.common import get_base_dir
 
 HF_REPO_ID = "fdeantoni/max-babbelaar-corpus"
 HF_SUBDIR = "data/all"
-DEFAULT_LOCAL_DIR = os.path.join(get_base_dir(), "base_data_babbelaar")
+DEFAULT_LOCAL_DIR = os.path.join(get_base_dir(), "base_data_babbelaar", HF_SUBDIR)
 
 NUM_TRAIN_SHARDS = 66
 NUM_VAL_SHARDS = 4
@@ -37,7 +37,7 @@ HF_SFT_REPO_ID = "fdeantoni/max-babbelaar-sft"
 SFT_FILES = ["sft_train.jsonl", "sft_val.jsonl"]
 DEFAULT_SFT_DIR = os.path.join(get_base_dir(), "sft_data_babbelaar")
 
-# Default to ~/.cache/nanochat/base_data_babbelaar; override with NANOCHAT_DATA_DIR.
+# Default to ~/.cache/nanochat/base_data_babbelaar/data/all; override with NANOCHAT_DATA_DIR.
 DATA_DIR = os.environ.get("NANOCHAT_DATA_DIR", DEFAULT_LOCAL_DIR)
 # Default to ~/.cache/nanochat/sft_data_babbelaar; override with NANOCHAT_SFT_DIR.
 SFT_DIR = os.environ.get("NANOCHAT_SFT_DIR", DEFAULT_SFT_DIR)
@@ -134,16 +134,19 @@ def download(local_dir=DEFAULT_LOCAL_DIR, num_train_shards=None):
 
     print(f"{len(already)} shards already present; downloading {len(missing)} missing shards from {HF_REPO_ID}...")
 
+    # local_dir is .../base_data_babbelaar/data/all; hf_hub_download mirrors the repo
+    # path under hf_root, so "data/all/<shard>" lands directly in local_dir.
+    hf_root = os.path.normpath(os.path.join(local_dir, "..", ".."))
     for split, idx, total in missing:
         filename = _shard_filename(split, idx, total)
         hf_path = f"{HF_SUBDIR}/{filename}"
-        dest = os.path.join(local_dir, filename)
         print(f"  {hf_path}")
         hf_hub_download(
             repo_id=HF_REPO_ID,
             repo_type="dataset",
             filename=hf_path,
-            local_dir=os.path.dirname(local_dir),  # parent: ./data (mirrors data/all/ structure)
+            local_dir=hf_root,
+            local_dir_use_symlinks=False,
         )
 
     total_present = len(os.listdir(local_dir))
@@ -180,13 +183,13 @@ def download_sft(sft_dir=None):
     print(f"{present} SFT file(s) already present; downloading {len(missing)} missing file(s) from {HF_SFT_REPO_ID}...")
 
     for filename in missing:
-        dest = os.path.join(sft_dir, filename)
         print(f"  {filename}")
         hf_hub_download(
             repo_id=HF_SFT_REPO_ID,
             repo_type="dataset",
             filename=filename,
             local_dir=sft_dir,
+            local_dir_use_symlinks=False,
         )
 
     print(f"\nDone — SFT files in {sft_dir}")
