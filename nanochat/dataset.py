@@ -129,7 +129,6 @@ def download(local_dir=DEFAULT_LOCAL_DIR, num_train_shards=None):
 
     if not missing:
         print(f"All {len(wanted)} shards already present in {local_dir} — nothing to download.")
-        _print_export(local_dir)
         return
 
     print(f"{len(already)} shards already present; downloading {len(missing)} missing shards from {HF_REPO_ID}...")
@@ -151,7 +150,6 @@ def download(local_dir=DEFAULT_LOCAL_DIR, num_train_shards=None):
 
     total_present = len(os.listdir(local_dir))
     print(f"\nDone — {total_present} Parquet files in {local_dir}")
-    _print_export(local_dir)
 
 
 def download_sft(sft_dir=None):
@@ -202,11 +200,6 @@ def _print_sft_export(sft_dir):
     print(f"  export SFT_TRAIN_FILE={abs_dir}/sft_train.jsonl")
     print(f"  export SFT_VAL_FILE={abs_dir}/sft_val.jsonl")
 
-
-def _print_export(local_dir):
-    abs_dir = os.path.abspath(local_dir)
-    print(f"\nSet the data directory before training:")
-    print(f"  export NANOCHAT_DATA_DIR={abs_dir}")
 
 
 if __name__ == "__main__":
