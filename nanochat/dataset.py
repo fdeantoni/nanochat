@@ -4,6 +4,10 @@ Parquet dataset utilities for Babbelaar pretraining.
 Parquet shards live in the directory pointed to by NANOCHAT_DATA_DIR.
 Files must use split-prefixed naming: train-*.parquet / validation-*.parquet.
 
+By default files are stored in ~/.cache/nanochat/base_data_babbelaar (same
+convention as upstream nanochat). Override with NANOCHAT_DATA_DIR.
+SFT files default to ~/.cache/nanochat/sft_data_babbelaar. Override with NANOCHAT_SFT_DIR.
+
 To download a subset of the pretraining corpus from HuggingFace:
 
     python -m nanochat.dataset --num-train-shards 3   # smoke test: ~600 MB
@@ -11,7 +15,7 @@ To download a subset of the pretraining corpus from HuggingFace:
 
 To download the SFT files:
 
-    python -m nanochat.dataset --sft --sft-dir ./data/sft
+    python -m nanochat.dataset --sft
 
 All validation shards are always downloaded. Files already present are skipped.
 """
@@ -20,19 +24,23 @@ import os
 import argparse
 import pyarrow.parquet as pq
 
+from nanochat.common import get_base_dir
+
 HF_REPO_ID = "fdeantoni/max-babbelaar-corpus"
 HF_SUBDIR = "data/all"
-DEFAULT_LOCAL_DIR = "./data/all"
+DEFAULT_LOCAL_DIR = os.path.join(get_base_dir(), "base_data_babbelaar")
 
 NUM_TRAIN_SHARDS = 66
 NUM_VAL_SHARDS = 4
 
 HF_SFT_REPO_ID = "fdeantoni/max-babbelaar-sft"
 SFT_FILES = ["sft_train.jsonl", "sft_val.jsonl"]
-DEFAULT_SFT_DIR = "./data/sft"
+DEFAULT_SFT_DIR = os.path.join(get_base_dir(), "sft_data_babbelaar")
 
-# NANOCHAT_DATA_DIR must be set to the directory containing the Parquet shards.
-DATA_DIR = os.environ.get("NANOCHAT_DATA_DIR")
+# Default to ~/.cache/nanochat/base_data_babbelaar; override with NANOCHAT_DATA_DIR.
+DATA_DIR = os.environ.get("NANOCHAT_DATA_DIR", DEFAULT_LOCAL_DIR)
+# Default to ~/.cache/nanochat/sft_data_babbelaar; override with NANOCHAT_SFT_DIR.
+SFT_DIR = os.environ.get("NANOCHAT_SFT_DIR", DEFAULT_SFT_DIR)
 
 
 def list_parquet_files(data_dir=None, split=None, **_kwargs):
@@ -42,14 +50,8 @@ def list_parquet_files(data_dir=None, split=None, **_kwargs):
     (``train-*.parquet`` / ``validation-*.parquet``) are returned.
     """
     data_dir = data_dir or DATA_DIR
-    assert data_dir, (
-        "NANOCHAT_DATA_DIR is not set.\n"
-        "Download the dataset first:\n"
-        "  python -m nanochat.dataset\n"
-        "Then set the env var as printed by that command."
-    )
     assert os.path.isdir(data_dir), (
-        f"NANOCHAT_DATA_DIR does not exist: {data_dir}\n"
+        f"Dataset directory does not exist: {data_dir}\n"
         "Run `python -m nanochat.dataset` to download the dataset."
     )
 
@@ -142,7 +144,6 @@ def download(local_dir=DEFAULT_LOCAL_DIR, num_train_shards=None):
             repo_type="dataset",
             filename=hf_path,
             local_dir=os.path.dirname(local_dir),  # parent: ./data (mirrors data/all/ structure)
-            local_dir_use_symlinks=False,
         )
 
     total_present = len(os.listdir(local_dir))
@@ -150,12 +151,13 @@ def download(local_dir=DEFAULT_LOCAL_DIR, num_train_shards=None):
     _print_export(local_dir)
 
 
-def download_sft(sft_dir=DEFAULT_SFT_DIR):
+def download_sft(sft_dir=None):
     """Download SFT JSONL files from HuggingFace Hub into *sft_dir*.
 
     Downloads ``sft_train.jsonl`` and ``sft_val.jsonl`` from
     ``fdeantoni/max-babbelaar-sft``. Files already present are skipped.
     """
+    sft_dir = sft_dir or SFT_DIR
     try:
         from huggingface_hub import hf_hub_download
     except ImportError:
@@ -185,7 +187,6 @@ def download_sft(sft_dir=DEFAULT_SFT_DIR):
             repo_type="dataset",
             filename=filename,
             local_dir=sft_dir,
-            local_dir_use_symlinks=False,
         )
 
     print(f"\nDone — SFT files in {sft_dir}")
@@ -228,8 +229,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--sft-dir",
-        default=DEFAULT_SFT_DIR,
-        help=f"destination directory for SFT files (default: {DEFAULT_SFT_DIR})",
+        default=None,
+        help=f"destination directory for SFT files (default: NANOCHAT_SFT_DIR env var, or {DEFAULT_SFT_DIR})",
     )
     args = parser.parse_args()
     if args.sft:

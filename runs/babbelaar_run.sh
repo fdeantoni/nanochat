@@ -10,6 +10,8 @@
 # Optional env vars:
 #   NANOCHAT_DATA_DIR  — path to an existing directory of Babbelaar Parquet shards.
 #                        If set and populated, the corpus download is skipped.
+#   NANOCHAT_SFT_DIR   — override the directory where SFT files are downloaded
+#                        (default: ~/.cache/nanochat/sft_data_babbelaar).
 #   SFT_TRAIN_FILE     — path to sft_train.jsonl.  If unset, the script
 #                        downloads sft_train.jsonl + sft_val.jsonl from
 #                        fdeantoni/max-babbelaar-sft automatically.
@@ -40,8 +42,6 @@ python -m nanochat.report reset
 # tokenizer training; download the rest in the background.
 if [ -z "$NANOCHAT_DATA_DIR" ] || [ -z "$(ls -A "$NANOCHAT_DATA_DIR" 2>/dev/null)" ]; then
     python -m nanochat.dataset --num-train-shards 8
-    export NANOCHAT_DATA_DIR="$(pwd)/data/all"
-    echo "NANOCHAT_DATA_DIR set to $NANOCHAT_DATA_DIR"
     # Download remaining shards in background while tokenizer trains
     python -m nanochat.dataset &
     DATASET_DOWNLOAD_PID=$!
@@ -74,11 +74,12 @@ torchrun --standalone --nproc_per_node=8 -m scripts.base_eval -- \
 
 # ── SFT files ─────────────────────────────────────────────────────────────────
 # Auto-download from fdeantoni/max-babbelaar-sft if SFT_TRAIN_FILE is not set.
-SFT_DIR="./data/sft"
+# Files land in ~/.cache/nanochat/sft_data_babbelaar/ by default.
 if [ -z "$SFT_TRAIN_FILE" ]; then
-    python -m nanochat.dataset --sft --sft-dir "$SFT_DIR"
-    export SFT_TRAIN_FILE="$(pwd)/${SFT_DIR#./}/sft_train.jsonl"
-    export SFT_VAL_FILE="$(pwd)/${SFT_DIR#./}/sft_val.jsonl"
+    python -m nanochat.dataset --sft
+    SFT_DIR=$(python -c "from nanochat.dataset import DEFAULT_SFT_DIR; print(DEFAULT_SFT_DIR)")
+    export SFT_TRAIN_FILE="${SFT_DIR}/sft_train.jsonl"
+    export SFT_VAL_FILE="${SFT_DIR}/sft_val.jsonl"
     echo "SFT_TRAIN_FILE set to $SFT_TRAIN_FILE"
     echo "SFT_VAL_FILE set to $SFT_VAL_FILE"
 fi
