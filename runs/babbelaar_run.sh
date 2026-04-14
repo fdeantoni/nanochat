@@ -1,5 +1,5 @@
 #!/bin/bash
-# Babbelaar full GPU run — pretraining + SFT for Max Babbelaar on 8×H100.
+# Babbelaar full GPU run — pretraining + SFT for Max Babbelaar.
 # Designed for a blank RunPod/Vast.ai node; takes approximately 3–4 hours.
 #
 # Usage:
@@ -17,11 +17,15 @@
 #                        fdeantoni/max-babbelaar-sft automatically.
 #   SFT_VAL_FILE       — path to sft_val.jsonl (auto-set alongside SFT_TRAIN_FILE
 #                        when downloaded).
+#   NPROC_PER_NODE     — number of GPUs to use (default: auto-detect via nvidia-smi).
+#                        Set to 1 for single-GPU runs.
 #   WANDB_RUN          — wandb run name ('dummy' disables logging, the default).
 #                        Set this before running to enable wandb: WANDB_RUN=babbelaar
 
 set -e
 export OMP_NUM_THREADS=1
+NPROC_PER_NODE="${NPROC_PER_NODE:-$(nvidia-smi -L | wc -l)}"
+echo "Using $NPROC_PER_NODE GPU(s) for training"
 
 # ── Python environment ────────────────────────────────────────────────────────
 command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -61,7 +65,7 @@ if [ -n "$DATASET_DOWNLOAD_PID" ]; then
 fi
 
 # ── Base pretraining ──────────────────────────────────────────────────────────
-torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- \
     --depth=24 \
     --target-param-data-ratio=8 \
     --device-batch-size=16 \
@@ -69,7 +73,7 @@ torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
     --run=$WANDB_RUN
 
 # ── Base evaluation ───────────────────────────────────────────────────────────
-torchrun --standalone --nproc_per_node=8 -m scripts.base_eval -- \
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval -- \
     --device-batch-size=16
 
 # ── SFT files ─────────────────────────────────────────────────────────────────
@@ -90,13 +94,13 @@ if [ -n "$SFT_VAL_FILE" ]; then
 fi
 
 # ── SFT ───────────────────────────────────────────────────────────────────────
-torchrun --standalone --nproc_per_node=8 -m scripts.chat_sft -- \
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- \
     --sft-file "$SFT_TRAIN_FILE" \
     $SFT_VAL_ARGS \
     --device-batch-size=16 \
     --run=$WANDB_RUN
 
-torchrun --standalone --nproc_per_node=8 -m scripts.chat_eval -- -i sft
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft
 
 # ── Report ────────────────────────────────────────────────────────────────────
 python -m nanochat.report generate
