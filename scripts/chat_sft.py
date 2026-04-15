@@ -13,7 +13,19 @@ import gc
 import argparse
 import os
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
+import signal
+import sys
 import time
+
+_preempt_requested = False
+
+def _handle_preempt(signum, frame):
+    global _preempt_requested
+    _preempt_requested = True
+    if int(os.environ.get('RANK', 0)) == 0:
+        print(f"\n[PREEMPT] SIGTERM received — will checkpoint and exit after current step", flush=True)
+
+signal.signal(signal.SIGTERM, _handle_preempt)
 import wandb
 import torch
 from nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, get_base_dir, autodetect_device_type, get_peak_flops, COMPUTE_DTYPE, COMPUTE_DTYPE_REASON, is_ddp_initialized
@@ -471,6 +483,39 @@ while True:
     t1 = time.time()
     dt = t1 - t0
     # -------------------------------------------------------------------------
+
+    # ── Preemption handling ──────────────────────────────────────────
+    if _preempt_requested:
+        print0(f"[PREEMPT] Saving SFT emergency checkpoint at step {step}...")
+        output_dirname = args.model_tag if args.model_tag else f"d{depth}"
+        checkpoint_dir = os.path.join(base_dir, "chatsft_checkpoints", output_dirname)
+        save_checkpoint(
+            checkpoint_dir,
+            step,
+            orig_model.state_dict(),
+            optimizer.state_dict(),
+            {
+                "step": step,
+                "val_bpb": val_bpb,
+                "model_config": {
+                    "sequence_len": args.max_seq_len,
+                    "vocab_size": tokenizer.get_vocab_size(),
+                    "n_layer": depth,
+                    "n_head": model.config.n_head,
+                    "n_kv_head": model.config.n_kv_head,
+                    "n_embd": model.config.n_embd,
+                    "window_pattern": model.config.window_pattern,
+                },
+                "user_config": user_config,
+            },
+            rank=ddp_rank,
+        )
+        print0(f"[PREEMPT] SFT checkpoint saved at step {step}. Exiting gracefully.")
+        if ddp_world_size > 1:
+            dist.barrier()
+            dist.destroy_process_group()
+        sys.exit(0)
+    # ─────────────────────────────────────────────────────────────────
 
     # State
     step += 1

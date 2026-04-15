@@ -15,11 +15,24 @@ import os
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 import gc
 import json
+import signal
+import sys
 import time
 import math
 import argparse
 from dataclasses import asdict
 from contextlib import contextmanager
+
+_preempt_requested = False
+
+def _handle_preempt(signum, frame):
+    global _preempt_requested
+    _preempt_requested = True
+    # print0 may not be safe in a signal handler; use plain print guarded by rank
+    if int(os.environ.get('RANK', 0)) == 0:
+        print(f"\n[PREEMPT] SIGTERM received — will checkpoint and exit after current step", flush=True)
+
+signal.signal(signal.SIGTERM, _handle_preempt)
 
 import wandb
 import torch
@@ -545,6 +558,38 @@ while True:
     t1 = time.time()
     dt = t1 - t0
     # -------------------------------------------------------------------------
+
+    # ── Preemption handling ──────────────────────────────────────────
+    if _preempt_requested:
+        print0(f"[PREEMPT] Saving emergency checkpoint at step {step}...")
+        save_checkpoint(
+            checkpoint_dir,
+            step,
+            orig_model.state_dict(),
+            optimizer.state_dict(),
+            {
+                "step": step,
+                "val_bpb": val_bpb,
+                "model_config": model_config_kwargs,
+                "user_config": user_config,
+                "device_batch_size": args.device_batch_size,
+                "max_seq_len": args.max_seq_len,
+                "total_batch_size": total_batch_size,
+                "dataloader_state_dict": dataloader_state_dict,
+                "loop_state": {
+                    "min_val_bpb": min_val_bpb,
+                    "smooth_train_loss": smooth_train_loss,
+                    "total_training_time": total_training_time,
+                },
+            },
+            rank=ddp_rank,
+        )
+        print0(f"[PREEMPT] Checkpoint saved at step {step}. Exiting gracefully.")
+        if ddp_world_size > 1:
+            dist.barrier()
+            dist.destroy_process_group()
+        sys.exit(0)
+    # ─────────────────────────────────────────────────────────────────
 
     # logging (CPU action only)
     ema_beta = 0.9 # EMA decay factor for some smoothing just for nicer logging
