@@ -25,6 +25,8 @@
 #   WANDB_RUN          — wandb run name ('dummy' disables logging, the default).
 #                        Set this before running to enable wandb: WANDB_RUN=babbelaar
 #   MODEL_TAG          — model tag override (default: empty, uses d${DEPTH}).
+#   CLEAN              — set to "true" to wipe all stage markers and checkpoints
+#                        before starting, forcing a completely fresh run.
 
 export OMP_NUM_THREADS=1
 NPROC_PER_NODE="${NPROC_PER_NODE:-$(nvidia-smi -L | wc -l)}"
@@ -48,6 +50,15 @@ fi
 NANOCHAT_BASE="${NANOCHAT_BASE_DIR:-$HOME/.cache/nanochat}"
 PRETRAIN_CKPT_DIR="${NANOCHAT_BASE}/base_checkpoints/${CKPT_DIRNAME}"
 SFT_CKPT_DIR="${NANOCHAT_BASE}/chatsft_checkpoints/${CKPT_DIRNAME}"
+
+# ── Clean start (CLEAN=true) ─────────────────────────────────────────
+if [ "${CLEAN}" = "true" ]; then
+    echo "[CLEAN] Removing stage markers and checkpoints for a fresh start..."
+    rm -rf "${NANOCHAT_BASE}/babbelaar_markers"
+    rm -rf "$PRETRAIN_CKPT_DIR"
+    rm -rf "$SFT_CKPT_DIR"
+    echo "[CLEAN] Done."
+fi
 
 MODEL_TAG_ARG=""
 if [ -n "$MODEL_TAG" ]; then
