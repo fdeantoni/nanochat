@@ -223,8 +223,14 @@ else
 fi
 
 # ── SFT evaluation ────────────────────────────────────────────────────────────
+# ARC-Easy|ARC-Challenge|MMLU are fast categorical checks (English, ~25% baseline, cheap sanity checks).
+# GSM8K, HumanEval, and SpellingBee are all generative, slow, and use English/code content that
+# Babbelaar was never trained on — they will always score 0% and are not diagnostic.
+# Skipping them means ChatCORE is not computed, but ChatCORE is not a meaningful signal for
+# Babbelaar anyway (the real evaluation is qualitative: chat_cli persona probes).
 if [ ! -f "$MARKER_DIR/sft_eval_done" ]; then
-    torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft || {
+    torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft \
+        -a "ARC-Easy|ARC-Challenge|MMLU" || {
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 143 ]; then
             echo "SFT eval interrupted by signal (exit code $EXIT_CODE). Safe to restart."
