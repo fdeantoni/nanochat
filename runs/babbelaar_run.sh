@@ -81,8 +81,8 @@ if [ -z "$WANDB_RUN" ]; then
     WANDB_RUN=dummy
 fi
 
-# ── System deps (Triton requires gcc to compile its CUDA driver module) ───────
-command -v gcc &> /dev/null || apt-get install -y gcc
+# ── System deps (Triton requires gcc + C headers to compile its CUDA driver module) ──
+command -v gcc &> /dev/null || apt-get install -y build-essential
 
 # ── Python environment ────────────────────────────────────────────────────────
 command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
