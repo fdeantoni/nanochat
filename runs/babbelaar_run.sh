@@ -39,6 +39,18 @@ TARGET_PARAM_DATA_RATIO=8
 DEVICE_BATCH_SIZE=16
 SAVE_EVERY=500
 
+# SFT batch size and iteration count.
+# The Babbelaar SFT mixture (~53k rows) is ~13× smaller than upstream nanochat's
+# SmolTalk/MMLU/GSM8K mixture, so the inherited pretrain total_batch_size of 1,048,576
+# would terminate SFT after ~10 optimizer steps (dataset-driven stopping condition).
+# Fix: size SFT_TOTAL_BATCH_SIZE so grad_accum_steps = 1 (one optimizer step per
+# micro-batch across all ranks), and set iterations to target ~330k conversation views
+# (~6 epochs over 53k rows). Both scale with NPROC_PER_NODE.
+#   2 GPUs: 65536 tokens/step, 1500 iterations
+#   8 GPUs: 262144 tokens/step, 375 iterations
+SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
+SFT_NUM_ITERATIONS=$((1500 * 2 / NPROC_PER_NODE))
+
 # Derive checkpoint subdir name exactly as base_train.py does:
 #   output_dirname = args.model_tag if args.model_tag else f"d{args.depth}"
 if [ -n "$MODEL_TAG" ]; then
@@ -189,6 +201,8 @@ if [ ! -f "$MARKER_DIR/sft_done" ]; then
         --sft-file "$SFT_TRAIN_FILE" \
         $SFT_VAL_ARGS \
         --device-batch-size=$DEVICE_BATCH_SIZE \
+        --total-batch-size=$SFT_TOTAL_BATCH_SIZE \
+        --num-iterations=$SFT_NUM_ITERATIONS \
         $MODEL_TAG_ARG \
         --run=$WANDB_RUN || {
         EXIT_CODE=$?
