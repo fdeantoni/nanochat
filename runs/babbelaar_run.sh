@@ -25,6 +25,9 @@
 #   WANDB_RUN          — wandb run name ('dummy' disables logging, the default).
 #                        Set this before running to enable wandb: WANDB_RUN=babbelaar
 #   MODEL_TAG          — model tag override (default: empty, uses d${DEPTH}).
+#   MODEL_STEP         — base checkpoint step to start SFT from (default: empty, uses latest).
+#                        Useful when the best pretrain checkpoint is not the final one
+#                        (e.g. MODEL_STEP=3500 to SFT from the step-3500 checkpoint).
 #   CLEAN              — set to "true" to wipe all stage markers and checkpoints
 #                        before starting, forcing a completely fresh run.
 
@@ -75,6 +78,13 @@ fi
 MODEL_TAG_ARG=""
 if [ -n "$MODEL_TAG" ]; then
     MODEL_TAG_ARG="--model-tag=$MODEL_TAG"
+fi
+
+MODEL_STEP="${MODEL_STEP:-}"
+MODEL_STEP_ARG=""
+if [ -n "$MODEL_STEP" ]; then
+    MODEL_STEP_ARG="--model-step=$MODEL_STEP"
+    echo "SFT will start from base checkpoint step $MODEL_STEP"
 fi
 
 if [ -z "$WANDB_RUN" ]; then
@@ -207,6 +217,7 @@ if [ ! -f "$MARKER_DIR/sft_done" ]; then
         --total-batch-size=$SFT_TOTAL_BATCH_SIZE \
         --num-iterations=$SFT_NUM_ITERATIONS \
         $MODEL_TAG_ARG \
+        $MODEL_STEP_ARG \
         --run=$WANDB_RUN || {
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 143 ]; then

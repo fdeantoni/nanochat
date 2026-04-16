@@ -300,11 +300,12 @@ def sft_data_generator_bos_bestfit(split, buffer_size=100):
             current_epoch = epoch
             if args.num_iterations > 0:
                 approx_progress = it / args.num_iterations
+                # num_iterations controls stopping; don't also stop at epoch end
             else:
                 approx_progress = consumed / dataset_size
-            # Trigger last_step when we've consumed enough (instead of when cursor wraps)
-            if consumed >= dataset_size:
-                last_step = True
+                # Data-driven stopping: stop after one epoch when num_iterations is not set
+                if consumed >= dataset_size:
+                    last_step = True
 
         # Build tensors
         use_cuda = device_type == "cuda"
