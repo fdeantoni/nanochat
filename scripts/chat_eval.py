@@ -22,6 +22,7 @@ from tasks.mmlu import MMLU
 from tasks.arc import ARC
 from tasks.gsm8k import GSM8K
 from tasks.spellingbee import SpellingBee
+from tasks.babbelaar import BabbelaarPersonaProbe, BabbelaarTemporalBoundary, BabbelaarDutchResponse
 
 # -----------------------------------------------------------------------------
 # Generative evaluation loop (we go one problem at a time, sample, evaluate)
@@ -165,6 +166,9 @@ def run_chat_eval(task_name, model, tokenizer, engine,
         'ARC-Challenge': partial(ARC, subset="ARC-Challenge", split="test"),
         'GSM8K': partial(GSM8K, subset="main", split="test"),
         'SpellingBee': partial(SpellingBee, size=256, split="test"),
+        'BabbelaarPersonaProbe': BabbelaarPersonaProbe,
+        'BabbelaarTemporalBoundary': BabbelaarTemporalBoundary,
+        'BabbelaarDutchResponse': BabbelaarDutchResponse,
     }[task_name]
     task_object = task_module()
     # Run the evaluation
@@ -201,7 +205,8 @@ if __name__ == "__main__":
     engine = Engine(model, tokenizer)
 
     # Get the tasks to evaluate on
-    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee',
+                 'BabbelaarPersonaProbe', 'BabbelaarTemporalBoundary', 'BabbelaarDutchResponse']
     baseline_accuracies = {
         'ARC-Easy': 0.25, # multiple choice 1 of 4 => 25%
         'ARC-Challenge': 0.25, # multiple choice 1 of 4 => 25%
@@ -209,6 +214,9 @@ if __name__ == "__main__":
         'GSM8K': 0.0, # open-ended => 0%
         'HumanEval': 0.0, # open-ended => 0%
         'SpellingBee': 0.0, # open-ended => 0%
+        'BabbelaarPersonaProbe': 0.0, # generative; pretrained model won't say "Babbelaar"
+        'BabbelaarTemporalBoundary': 0.0, # generative; pretrained model explains everything
+        'BabbelaarDutchResponse': 0.0, # generative; pretrained model may answer in English
     }
     task_names = all_tasks if args.task_name is None else args.task_name.split('|')
 

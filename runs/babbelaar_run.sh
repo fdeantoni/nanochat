@@ -230,7 +230,7 @@ fi
 # Babbelaar anyway (the real evaluation is qualitative: chat_cli persona probes).
 if [ ! -f "$MARKER_DIR/sft_eval_done" ]; then
     torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft \
-        -a "ARC-Easy|ARC-Challenge|MMLU" || {
+        -a "ARC-Easy|ARC-Challenge|MMLU|BabbelaarPersonaProbe|BabbelaarTemporalBoundary|BabbelaarDutchResponse" || {
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 143 ]; then
             echo "SFT eval interrupted by signal (exit code $EXIT_CODE). Safe to restart."
