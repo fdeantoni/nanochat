@@ -40,7 +40,7 @@ NPROC_PER_NODE="${NPROC_PER_NODE:-$(nvidia-smi -L | wc -l)}"
 echo "Using $NPROC_PER_NODE GPU(s) for training"
 
 # ── Training config (single source of truth) ─────────────────────────
-DEPTH="${DEPTH:-24}"
+DEPTH="${DEPTH:-12}"
 MODEL_TAG="${MODEL_TAG:-}"
 TARGET_PARAM_DATA_RATIO=8
 DEVICE_BATCH_SIZE=16
