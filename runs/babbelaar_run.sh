@@ -79,10 +79,10 @@ if [ "${CLEAN}" = "true" ]; then
     echo "[CLEAN] Done."
 fi
 
-MODEL_TAG_ARG=""
-if [ -n "$MODEL_TAG" ]; then
-    MODEL_TAG_ARG="--model-tag=$MODEL_TAG"
-fi
+# Always pass --model-tag so chat_sft/chat_eval load the correct checkpoint.
+# Without it, find_largest_model() picks the deepest model in base_checkpoints/,
+# which is wrong when multiple depths (e.g. d12 + d24) coexist.
+MODEL_TAG_ARG="--model-tag=${MODEL_TAG:-$CKPT_DIRNAME}"
 
 MODEL_STEP="${MODEL_STEP:-}"
 MODEL_STEP_ARG=""
