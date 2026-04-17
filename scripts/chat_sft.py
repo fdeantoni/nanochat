@@ -79,6 +79,7 @@ parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max pro
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
 # Custom SFT file (replaces default task mixture when provided)
+parser.add_argument("--save-every", type=int, default=-1, help="save checkpoints every N steps (-1 = only at end)")
 parser.add_argument("--sft-file", type=str, default=None, help="path to custom SFT JSONL file (replaces default task mixture)")
 parser.add_argument("--sft-val-file", type=str, default=None, help="path to custom SFT validation JSONL file (defaults to --sft-file)")
 args = parser.parse_args()
@@ -419,8 +420,9 @@ while True:
         })
         model.train()
 
-    # save checkpoint at the end of the run (all ranks participate so each saves its optimizer shard)
-    if last_step:
+    # save checkpoint: at the end of the run, or every save_every steps (except step 0)
+    should_save = last_step or (step > 0 and args.save_every > 0 and step % args.save_every == 0)
+    if should_save:
         output_dirname = args.model_tag if args.model_tag else f"d{depth}" # e.g. d12
         checkpoint_dir = os.path.join(base_dir, "chatsft_checkpoints", output_dirname)
         save_checkpoint(
@@ -430,7 +432,7 @@ while True:
             optimizer.state_dict(),
             {
                 "step": step,
-                "val_bpb": val_bpb, # loss at last step
+                "val_bpb": val_bpb, # loss at last eval
                 "model_config": {
                     "sequence_len": args.max_seq_len,
                     "vocab_size": tokenizer.get_vocab_size(),

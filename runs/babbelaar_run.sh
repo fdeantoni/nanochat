@@ -221,6 +221,7 @@ if [ ! -f "$MARKER_DIR/sft_done" ]; then
         --device-batch-size=$DEVICE_BATCH_SIZE \
         --total-batch-size=$SFT_TOTAL_BATCH_SIZE \
         --num-iterations=$SFT_NUM_ITERATIONS \
+        --save-every=$SAVE_EVERY \
         --chatcore-every=-1 \
         $MODEL_TAG_ARG \
         $MODEL_STEP_ARG \
