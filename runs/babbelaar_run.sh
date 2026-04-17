@@ -28,6 +28,8 @@
 #   MODEL_STEP         — base checkpoint step to start SFT from (default: empty, uses latest).
 #                        Useful when the best pretrain checkpoint is not the final one
 #                        (e.g. MODEL_STEP=3500 to SFT from the step-3500 checkpoint).
+#   SFT_NUM_ITERATIONS — override SFT iteration count (default: auto-computed to ~6 epochs).
+#                        Lower values (e.g. 400) help prevent SFT overfitting.
 #   CLEAN              — set to "true" to wipe all stage markers and checkpoints
 #                        before starting, forcing a completely fresh run.
 
@@ -52,7 +54,7 @@ SAVE_EVERY=500
 #   2 GPUs: 65536 tokens/step, 1500 iterations
 #   8 GPUs: 262144 tokens/step, 375 iterations
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS=$((1500 * 2 / NPROC_PER_NODE))
+SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$((1500 * 2 / NPROC_PER_NODE))}"
 
 # Derive checkpoint subdir name exactly as base_train.py does:
 #   output_dirname = args.model_tag if args.model_tag else f"d{args.depth}"
