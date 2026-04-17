@@ -22,6 +22,8 @@
 #                        when downloaded).
 #   NPROC_PER_NODE     — number of GPUs to use (default: auto-detect via nvidia-smi).
 #                        Set to 1 for single-GPU runs.
+#   DEPTH              — model depth / number of layers (default: 24).
+#                        Use DEPTH=16 for a smaller model that better fits the corpus.
 #   WANDB_RUN          — wandb run name ('dummy' disables logging, the default).
 #                        Set this before running to enable wandb: WANDB_RUN=babbelaar
 #   MODEL_TAG          — model tag override (default: empty, uses d${DEPTH}).
@@ -38,7 +40,7 @@ NPROC_PER_NODE="${NPROC_PER_NODE:-$(nvidia-smi -L | wc -l)}"
 echo "Using $NPROC_PER_NODE GPU(s) for training"
 
 # ── Training config (single source of truth) ─────────────────────────
-DEPTH=24
+DEPTH="${DEPTH:-24}"
 MODEL_TAG="${MODEL_TAG:-}"
 TARGET_PARAM_DATA_RATIO=8
 DEVICE_BATCH_SIZE=16
