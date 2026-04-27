@@ -40,9 +40,9 @@ NPROC_PER_NODE="${NPROC_PER_NODE:-$(nvidia-smi -L | wc -l)}"
 echo "Using $NPROC_PER_NODE GPU(s) for training"
 
 # ── Training config (single source of truth) ─────────────────────────
-DEPTH="${DEPTH:-12}"
+DEPTH="${DEPTH:-18}"
 MODEL_TAG="${MODEL_TAG:-}"
-TARGET_PARAM_DATA_RATIO=8
+TARGET_PARAM_DATA_RATIO=20
 DEVICE_BATCH_SIZE=16
 SAVE_EVERY=500
 
@@ -160,6 +160,7 @@ if [ ! -f "$MARKER_DIR/pretrain_done" ]; then
         --depth=$DEPTH \
         --target-param-data-ratio=$TARGET_PARAM_DATA_RATIO \
         --device-batch-size=$DEVICE_BATCH_SIZE \
+        --warmup-steps=150 \
         --fp8 \
         --save-every=$SAVE_EVERY \
         --resume-from-step=$RESUME_STEP \
