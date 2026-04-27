@@ -98,11 +98,13 @@ fi
 # ── System deps (Triton requires gcc + C headers to compile its CUDA driver module) ──
 command -v gcc &> /dev/null || apt-get install -y build-essential
 
-# ── Python environment ────────────────────────────────────────────────────────
+# ── Python environment (venv on network volume so it survives pod restarts) ──
 command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-[ -d ".venv" ] || uv venv
+VENV_DIR="${NANOCHAT_BASE}/.venv"
+export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
+[ -d "$VENV_DIR" ] || uv venv "$VENV_DIR"
 uv sync --extra gpu
-source .venv/bin/activate
+source "$VENV_DIR/bin/activate"
 
 # ── Stage markers (on network volume for persistence) ─────────────────
 MARKER_DIR="${NANOCHAT_BASE}/babbelaar_markers"
