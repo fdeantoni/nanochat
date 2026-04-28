@@ -266,6 +266,13 @@ async def generate_stream(
 
     assistant_end = worker.tokenizer.encode_special("<|assistant_end|>")
     bos = worker.tokenizer.get_bos_token_id()
+    python_start = worker.tokenizer.encode_special("<|python_start|>")
+    output_end   = worker.tokenizer.encode_special("<|output_end|>")
+
+    # Suppress tool-use blocks (python call + search output) from the text
+    # stream; emit structured events instead so the UI can show a search
+    # indicator rather than a wall of raw JSON.
+    in_tool_block = False
 
     # Accumulate tokens to properly handle multi-byte UTF-8 characters (like emojis)
     accumulated_tokens = []
@@ -285,6 +292,22 @@ async def generate_stream(
         # Stopping criteria
         if token == assistant_end or token == bos:
             break
+
+        # --- Tool-use gate ---
+        if token == python_start:
+            in_tool_block = True
+            yield f"data: {json.dumps({'searching': True})}\n\n"
+            continue
+        if token == output_end:
+            in_tool_block = False
+            # Reset the text buffer so output-block text can't bleed into the
+            # narration delta on the next iteration.
+            accumulated_tokens = []
+            last_clean_text = ""
+            yield f"data: {json.dumps({'search_done': True})}\n\n"
+            continue
+        if in_tool_block:
+            continue  # suppress python call tokens + output_start + JSON tokens
 
         # Append the token to sequence
         accumulated_tokens.append(token)
