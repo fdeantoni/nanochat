@@ -11,6 +11,9 @@ Notes:
 The whole thing is made as efficient as possible.
 """
 
+import ast
+import json
+import logging
 import torch
 import torch.nn.functional as F
 import signal
@@ -19,6 +22,8 @@ from contextlib import contextmanager
 from collections import deque
 from nanochat.common import compute_init, autodetect_device_type
 from nanochat.checkpoint_manager import load_model
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # Calculator tool helpers
@@ -77,6 +82,87 @@ def use_calculator(expr):
 
     # Evaluate with timeout
     return eval_with_timeout(expr)
+
+
+# -----------------------------------------------------------------------------
+# Babbelaar search tool
+#
+# When the model emits ``<|python_start|>search("...", year_from=..., ...)<|python_end|>``
+# the inference loop dispatches the expression here BEFORE falling back to
+# ``use_calculator``. We parse the call via ``ast`` (no ``exec``) so the
+# allowed surface is exactly: a single call to ``search`` with literal
+# args from a fixed whitelist. Anything else returns None and the engine
+# tries the calculator path next.
+
+_SEARCH_KW_ALLOWED = {'query', 'year_from', 'year_to', 'limit'}
+
+
+def _parse_search_call(expr: str) -> dict | None:
+    """Parse ``search(query, year_from=..., year_to=..., limit=...)``.
+    Returns the kwargs dict, or None if the expression is anything else.
+    """
+    try:
+        tree = ast.parse(expr.strip(), mode='eval')
+    except SyntaxError:
+        return None
+    call = tree.body
+    if not isinstance(call, ast.Call):
+        return None
+    if not isinstance(call.func, ast.Name) or call.func.id != 'search':
+        return None
+    kwargs: dict = {}
+    # Positional: optionally one query string.
+    if call.args:
+        if len(call.args) != 1 or not isinstance(call.args[0], ast.Constant):
+            return None
+        kwargs['query'] = call.args[0].value
+    for kw in call.keywords:
+        if kw.arg not in _SEARCH_KW_ALLOWED:
+            return None
+        if not isinstance(kw.value, ast.Constant):
+            return None
+        kwargs[kw.arg] = kw.value.value
+    if not isinstance(kwargs.get('query'), str) or not kwargs['query'].strip():
+        return None
+    return kwargs
+
+
+def use_search(expr: str) -> str | None:
+    """Dispatch ``search(...)`` to the Babbelaar BM25 index.
+
+    Returns the JSON-serialized list of hits (the exact format the SFT
+    examples in step 143 contain), or None if the expression isn't a
+    valid search call. The caller forwards the result into the next
+    ``<|output_start|>...<|output_end|>`` block.
+    """
+    kwargs = _parse_search_call(expr)
+    if kwargs is None:
+        return None
+    try:
+        # Lazy import — we don't want to load bm25s on the math-only path,
+        # and we want a graceful no-op if the index isn't deployed.
+        from nanochat.babbelaar_search import BabbelaarSearchIndex, default_index_dir
+        if not (default_index_dir() / 'params.index.json').exists():
+            return None
+        # Cache the loaded index on the function object itself; one
+        # singleton per inference process is correct.
+        idx = getattr(use_search, '_idx', None)
+        if idx is None:
+            idx = BabbelaarSearchIndex()
+            use_search._idx = idx  # type: ignore[attr-defined]
+        # Coerce optional ints — model occasionally emits floats.
+        for k in ('year_from', 'year_to', 'limit'):
+            if k in kwargs and kwargs[k] is not None:
+                try:
+                    kwargs[k] = int(kwargs[k])
+                except (TypeError, ValueError):
+                    return None
+        hits = idx.search(**kwargs)
+        return json.dumps(hits, ensure_ascii=False)
+    except Exception as exc:
+        logger.warning("babbelaar_search.use_search failed: %s", exc)
+        return None
+
 
 # -----------------------------------------------------------------------------
 class KVCache:
@@ -261,9 +347,17 @@ class Engine:
                     state.in_python_block = False
                     if state.python_expr_tokens:
                         expr = self.tokenizer.decode(state.python_expr_tokens)
-                        result = use_calculator(expr)
+                        # Try the Babbelaar search tool first (returns the
+                        # exact JSON shape step 143's SFT examples contain).
+                        # Fall back to the calculator for arithmetic that
+                        # the GSM8K-style training installed.
+                        result = use_search(expr)
+                        if result is None:
+                            result = use_calculator(expr)
+                            if result is not None:
+                                result = str(result)
                         if result is not None:
-                            result_tokens = self.tokenizer.encode(str(result))
+                            result_tokens = self.tokenizer.encode(result)
                             state.forced_tokens.append(output_start)
                             state.forced_tokens.extend(result_tokens)
                             state.forced_tokens.append(output_end)

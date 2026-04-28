@@ -30,8 +30,10 @@
 #   MODEL_STEP         — base checkpoint step to start SFT from (default: empty, uses latest).
 #                        Useful when the best pretrain checkpoint is not the final one
 #                        (e.g. MODEL_STEP=3500 to SFT from the step-3500 checkpoint).
-#   SFT_NUM_ITERATIONS — override SFT iteration count (default: auto-computed to ~6 epochs).
-#                        Lower values (e.g. 400) help prevent SFT overfitting.
+#   SFT_NUM_ITERATIONS — override SFT iteration count (default: auto-scaled
+#                        for ~32M training tokens regardless of GPU count;
+#                        with a floor of 200 steps). Babbelaar's SFT mixture
+#                        saturates fast, so don't push much higher.
 #   CLEAN              — set to "true" to wipe all stage markers and checkpoints
 #                        before starting, forcing a completely fresh run.
 
@@ -47,16 +49,24 @@ DEVICE_BATCH_SIZE=16
 SAVE_EVERY=500
 
 # SFT batch size and iteration count.
-# The Babbelaar SFT mixture (~53k rows) is ~13× smaller than upstream nanochat's
-# SmolTalk/MMLU/GSM8K mixture, so the inherited pretrain total_batch_size of 1,048,576
-# would terminate SFT after ~10 optimizer steps (dataset-driven stopping condition).
-# Fix: size SFT_TOTAL_BATCH_SIZE so grad_accum_steps = 1 (one optimizer step per
-# micro-batch across all ranks), and set iterations to target ~330k conversation views
-# (~6 epochs over 53k rows). Both scale with NPROC_PER_NODE.
-#   2 GPUs: 65536 tokens/step, 1500 iterations
-#   8 GPUs: 262144 tokens/step, 375 iterations
+# Babbelaar's SFT mixture is small (~55–60k rows after the 12× curated upsample)
+# and overlaps heavily with the pretrain distribution, so it saturates fast.
+# In the d18 run, val BPB hit its minimum near step 500 on 2 GPUs (~32M training
+# tokens, ~2 effective epochs) and rose continuously after that as the model
+# memorized the upsampled curated set.
+#
+# Total batch size is sized so grad_accum_steps = 1 (one optimizer step per
+# micro-batch across all ranks). Iteration count keeps total training tokens
+# roughly constant across GPU configurations:
+#   1 GPU:  32768 tokens/step × 1000 iters ≈ 32M tokens
+#   2 GPUs: 65536 tokens/step ×  500 iters ≈ 32M tokens
+#   4 GPUs: 131072 tokens/step × 250 iters ≈ 32M tokens
+#   8 GPUs: 262144 tokens/step × 125 iters ≈ 32M tokens   ← floored to 200 below
+# Override via SFT_NUM_ITERATIONS env var if your data scale differs.
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$((1500 * 2 / NPROC_PER_NODE))}"
+SFT_NUM_ITERATIONS_DEFAULT=$((1000 / NPROC_PER_NODE))
+[ $SFT_NUM_ITERATIONS_DEFAULT -lt 200 ] && SFT_NUM_ITERATIONS_DEFAULT=200
+SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$SFT_NUM_ITERATIONS_DEFAULT}"
 
 # Derive checkpoint subdir name exactly as base_train.py does:
 #   output_dirname = args.model_tag if args.model_tag else f"d{args.depth}"
@@ -249,10 +259,44 @@ fi
 # Babbelaar was never trained on — they will always score 0% and are not diagnostic.
 # Skipping them means ChatCORE is not computed, but ChatCORE is not a meaningful signal for
 # Babbelaar anyway (the real evaluation is qualitative: chat_cli persona probes).
+#
+# Pick the SFT checkpoint with the lowest val_bpb instead of the latest one.
+# Babbelaar's small SFT mixture saturates well before the iteration budget
+# is exhausted, so the final-step checkpoint is typically overfit.
+SFT_EVAL_STEP_ARG=""
+if [ -d "$SFT_CKPT_DIR" ]; then
+    BEST_SFT_STEP=$(python3 - "$SFT_CKPT_DIR" <<'PY' 2>/dev/null
+import json, glob, os, sys
+ckpt_dir = sys.argv[1]
+best = None
+for p in sorted(glob.glob(os.path.join(ckpt_dir, 'meta_*.json'))):
+    try:
+        with open(p) as fh:
+            d = json.load(fh)
+        bpb = d.get('val_bpb')
+        if bpb is None:
+            continue
+        step = int(os.path.basename(p).split('_')[-1].split('.')[0])
+        if best is None or bpb < best[0]:
+            best = (bpb, step)
+    except Exception:
+        pass
+if best:
+    print(best[1])
+PY
+)
+    if [ -n "$BEST_SFT_STEP" ]; then
+        SFT_EVAL_STEP_ARG="--step=$BEST_SFT_STEP"
+        echo "Using best SFT checkpoint by val_bpb: step $BEST_SFT_STEP"
+    else
+        echo "No val_bpb metadata in $SFT_CKPT_DIR; chat_eval will use latest step."
+    fi
+fi
+
 if [ ! -f "$MARKER_DIR/sft_eval_done" ]; then
     torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft \
         -a "ARC-Easy|ARC-Challenge|MMLU|BabbelaarPersonaProbe|BabbelaarTemporalBoundary|BabbelaarDutchResponse" \
-        $MODEL_TAG_ARG || {
+        $MODEL_TAG_ARG $SFT_EVAL_STEP_ARG || {
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 143 ]; then
             echo "SFT eval interrupted by signal (exit code $EXIT_CODE). Safe to restart."
