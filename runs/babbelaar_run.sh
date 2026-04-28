@@ -47,6 +47,7 @@ MODEL_TAG="${MODEL_TAG:-}"
 TARGET_PARAM_DATA_RATIO=20
 DEVICE_BATCH_SIZE=16
 SAVE_EVERY=500
+SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-100}"
 
 # SFT batch size and iteration count.
 # Babbelaar's SFT mixture is small (~55–60k rows after the 12× curated upsample)
@@ -234,7 +235,7 @@ if [ ! -f "$MARKER_DIR/sft_done" ]; then
         --device-batch-size=$DEVICE_BATCH_SIZE \
         --total-batch-size=$SFT_TOTAL_BATCH_SIZE \
         --num-iterations=$SFT_NUM_ITERATIONS \
-        --save-every=$SAVE_EVERY \
+        --save-every=$SAVE_EVERY_SFT \
         --chatcore-every=-1 \
         $MODEL_TAG_ARG \
         $MODEL_STEP_ARG \
