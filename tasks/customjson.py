@@ -55,7 +55,7 @@ class CustomJSON(Task):
                         assert "content" in message, f"Message {i} missing 'content' field"
                         expected_role = "user" if i % 2 == 0 else "assistant"
                         assert message["role"] == expected_role, f"Message {i} has role {message['role']} but should be {expected_role}"
-                        assert isinstance(message["content"], str), f"Message {i} content must be a string"
+                        assert isinstance(message["content"], (str, list)), f"Message {i} content must be a string or list of parts"
 
                     self.conversations.append(messages)
 

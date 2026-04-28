@@ -19,6 +19,7 @@ The two paths cannot drift.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sys
@@ -26,6 +27,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import bm25s
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # Index location resolution
@@ -41,13 +44,26 @@ def default_index_dir() -> Path:
       1. ``BABBELAAR_INDEX_DIR`` env var (explicit override)
       2. ``$NANOCHAT_BASE_DIR/babbelaar_index/`` (runtime default — same
          pattern as model checkpoints, persists on the network volume)
-      3. ``~/.cache/nanochat/babbelaar_index/`` (final fallback)
+      3. ``{project_root}/data/index/delpher_bm25/`` (Babbelaar dev layout:
+         this file lives at ``nanochat/nanochat/babbelaar_search.py`` inside
+         the babbelaar project; three ``parent`` steps reach the project root
+         where step 142 writes the index)
+      4. ``~/.cache/nanochat/babbelaar_index/`` (final fallback)
     """
     if explicit := os.environ.get("BABBELAAR_INDEX_DIR"):
         return Path(explicit)
     base = os.environ.get("NANOCHAT_BASE_DIR")
     if base:
-        return Path(base) / _DEFAULT_RUNTIME_SUBDIR
+        primary = Path(base) / _DEFAULT_RUNTIME_SUBDIR
+        if primary.exists():
+            return primary
+    # Babbelaar dev: babbelaar_search.py is at <project>/nanochat/nanochat/;
+    # three parents up is the project root, where step 142 writes the index.
+    project_index = Path(__file__).resolve().parent.parent.parent / "data" / "index" / "delpher_bm25"
+    if project_index.exists():
+        return project_index
+    if base:
+        return Path(base) / _DEFAULT_RUNTIME_SUBDIR  # let caller report missing index
     return Path.home() / ".cache" / "nanochat" / _DEFAULT_RUNTIME_SUBDIR
 
 
@@ -213,6 +229,8 @@ class BabbelaarSearchIndex:
         to that range and **sorted ascending by date** (timeline mode).
         Otherwise results are sorted by descending BM25 score.
         """
+        logger.info("Running search with query=%r, year_from=%r, year_to=%r, limit=%r",
+                    query, year_from, year_to, limit)
         if not query or not query.strip():
             return []
         # Over-fetch when filtering so the year filter does not starve the

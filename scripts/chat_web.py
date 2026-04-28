@@ -64,7 +64,7 @@ parser.add_argument('-n', '--num-gpus', type=int, default=1, help='Number of GPU
 parser.add_argument('-i', '--source', type=str, default="sft", help="Source of the model: sft|rl")
 parser.add_argument('-t', '--temperature', type=float, default=0.8, help='Default temperature for generation')
 parser.add_argument('-k', '--top-k', type=int, default=50, help='Default top-k sampling parameter')
-parser.add_argument('-m', '--max-tokens', type=int, default=512, help='Default max tokens for generation')
+parser.add_argument('-m', '--max-tokens', type=int, default=1024, help='Default max tokens for generation')
 parser.add_argument('-g', '--model-tag', type=str, default=None, help='Model tag to load')
 parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
 parser.add_argument('-p', '--port', type=int, default=8000, help='Port to run the server on')
