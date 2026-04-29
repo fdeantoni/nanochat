@@ -140,17 +140,12 @@ def use_search(expr: str) -> str | None:
     if kwargs is None:
         return None
     try:
-        # Lazy import — we don't want to load bm25s on the math-only path,
-        # and we want a graceful no-op if the index isn't deployed.
-        from nanochat.babbelaar_search import BabbelaarSearchIndex, default_index_dir
+        # Use the shared singleton from babbelaar_search so that
+        # preload_index() called at startup is reused here.
+        from nanochat.babbelaar_search import _ensure_loaded, default_index_dir
         if not (default_index_dir() / 'params.index.json').exists():
             return None
-        # Cache the loaded index on the function object itself; one
-        # singleton per inference process is correct.
-        idx = getattr(use_search, '_idx', None)
-        if idx is None:
-            idx = BabbelaarSearchIndex()
-            use_search._idx = idx  # type: ignore[attr-defined]
+        idx = _ensure_loaded()
         # Coerce optional ints — model occasionally emits floats.
         for k in ('year_from', 'year_to', 'limit'):
             if k in kwargs and kwargs[k] is not None:
@@ -321,6 +316,41 @@ class Engine:
             # Stop condition: all rows are completed
             if all(state.completed for state in row_states):
                 break
+
+            # Fast path: when every row has forced tokens queued (e.g. after a
+            # search tool call), drain them all in a single batched forward pass
+            # instead of one forward per token. On CPU this turns ~70 s of
+            # sequential passes into a single prefill call (~1–3 s).
+            if all(len(state.forced_tokens) > 0 for state in row_states):
+                forced_sequence = []  # list of token-columns (each length B)
+                while True:
+                    if max_tokens is not None and num_generated >= max_tokens:
+                        break
+                    if all(state.completed for state in row_states):
+                        break
+                    if not all(len(state.forced_tokens) > 0 for state in row_states):
+                        break  # a row ran out — resume the normal loop
+                    col = []
+                    masks = []
+                    for state in row_states:
+                        tok = state.forced_tokens.popleft()
+                        state.current_tokens.append(tok)
+                        if tok == assistant_end or tok == bos:
+                            state.completed = True
+                        col.append(tok)
+                        masks.append(0)
+                    forced_sequence.append(col)
+                    yield col, masks
+                    num_generated += 1
+                if forced_sequence:
+                    # forced_sequence is (T, B); model wants (B, T)
+                    ids_batch = torch.tensor(
+                        forced_sequence, dtype=torch.long, device=device
+                    ).T
+                    logits = self.model.forward(
+                        ids_batch, kv_cache=kv_cache_decode
+                    )[:, -1, :]
+                continue
 
             # Sample the next token for each row
             next_ids = sample_next_token(logits, rng, temperature, top_k)  # (B, 1)

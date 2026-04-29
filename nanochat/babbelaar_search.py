@@ -24,7 +24,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable
 
 import bm25s
 
@@ -290,6 +290,20 @@ def _ensure_loaded() -> BabbelaarSearchIndex:
     if _singleton is None:
         _singleton = BabbelaarSearchIndex()
     return _singleton
+
+
+def preload_index() -> BabbelaarSearchIndex | None:
+    """Pre-warm the singleton index.
+
+    Call once at server startup so the first search request doesn't pay the
+    cold-load cost (~1 s to parse the 125 MB corpus from disk). Safe to call
+    multiple times. Returns the loaded index, or None if the index is missing.
+    """
+    try:
+        return _ensure_loaded()
+    except Exception as exc:
+        logger.warning("preload_index failed: %s", exc)
+        return None
 
 
 def search(

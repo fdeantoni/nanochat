@@ -219,6 +219,16 @@ async def lifespan(app: FastAPI):
     print("Loading nanochat models across GPUs...")
     app.state.worker_pool = WorkerPool(num_gpus=args.num_gpus)
     await app.state.worker_pool.initialize(args.source, model_tag=args.model_tag, step=args.step)
+    # Pre-warm the BM25 search index so the first search request doesn't pay
+    # the cold-load cost (~1 s to parse the 125 MB corpus from disk).
+    try:
+        from nanochat.babbelaar_search import preload_index
+        if preload_index() is not None:
+            print("  Search index pre-warmed.")
+        else:
+            print("  No search index found; search will be disabled.")
+    except Exception as e:
+        print(f"  Search index pre-warm skipped: {e}")
     print(f"Server ready at http://localhost:{args.port}")
     yield
 
