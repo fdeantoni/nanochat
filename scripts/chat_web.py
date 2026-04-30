@@ -70,14 +70,14 @@ parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
 parser.add_argument('-p', '--port', type=int, default=8000, help='Port to run the server on')
 parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
 parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind the server to')
+parser.add_argument('--log-level', type=str, default='INFO',
+                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                    help='Logging level (default: INFO)')
 args = parser.parse_args()
 
-# Configure logging for conversation traffic
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# common.py calls basicConfig at import time, so basicConfig here would be a no-op.
+# Set the root level directly instead so --log-level is always honoured.
+logging.root.setLevel(getattr(logging, args.log_level))
 logger = logging.getLogger(__name__)
 
 device_type = autodetect_device_type() if args.device_type == "" else args.device_type
@@ -262,6 +262,13 @@ async def logo():
     logo_path = os.path.join("nanochat", "logo.png")
     return FileResponse(logo_path, media_type="image/png")
 
+
+@app.get("/delpher.svg")
+async def delpher_logo():
+    """Serve the Delpher logo for inline citation links."""
+    logo_path = os.path.join("nanochat", "delpher.svg")
+    return FileResponse(logo_path, media_type="image/svg+xml")
+
 async def generate_stream(
     worker: Worker,
     tokens,
@@ -437,4 +444,4 @@ if __name__ == "__main__":
     import uvicorn
     print(f"Starting NanoChat Web Server")
     print(f"Temperature: {args.temperature}, Top-k: {args.top_k}, Max tokens: {args.max_tokens}")
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level.lower())

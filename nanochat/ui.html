@@ -138,18 +138,39 @@
             max-width: 100%;
         }
 
+        .message.assistant {
+            align-items: flex-start;
+        }
+
         .message.assistant .message-content {
             background: transparent;
             border: none;
-            cursor: pointer;
-            border-radius: 0.5rem;
-            padding: 0.5rem;
-            margin-left: -0.5rem;
-            transition: background-color 0.2s ease;
         }
 
-        .message.assistant .message-content:hover {
-            background-color: #f9fafb;
+        .regenerate-btn {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            margin-top: 0.2rem;
+            margin-left: 0.4rem;
+            border: none;
+            background: none;
+            color: #9ca3af;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease, color 0.2s ease;
+        }
+
+        .message.assistant:hover .regenerate-btn {
+            opacity: 1;
+        }
+
+        .regenerate-btn:hover {
+            color: #7a4f2b;
         }
 
         .message.user .message-content {
@@ -265,6 +286,24 @@
             border-radius: 0.75rem;
             margin-top: 0.5rem;
         }
+
+        .message-content a {
+            color: #7a4f2b;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .message-content a:hover {
+            color: #b06830;
+        }
+
+        .source-icon {
+            height: 0.8em;
+            width: auto;
+            vertical-align: middle;
+            margin-right: 0.2em;
+            filter: grayscale(1) opacity(0.6);
+        }
     </style>
 </head>
 <body>
@@ -313,6 +352,28 @@
         const chatWrapper = document.getElementById('chatWrapper');
         const chatInput = document.getElementById('chatInput');
         const sendButton = document.getElementById('sendButton');
+
+        function renderText(text) {
+            // 1. HTML-escape to prevent XSS
+            const escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            // 2. Markdown inline links: [label](url)
+            //    resolver.kb.nl / delpher.nl links get the Delpher logo
+            let result = escaped.replace(
+                /\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g,
+                (_, label, url) => {
+                    const icon = (url.includes('resolver.kb.nl') || url.includes('delpher.nl'))
+                        ? '<img src="/delpher.svg" class="source-icon" alt="Delpher">'
+                        : '';
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${icon}${label}</a>`;
+                }
+            );
+            // 3. Markdown italic: *text*
+            result = result.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+            return result;
+        }
 
         let messages = [];
         let isGenerating = false;
@@ -371,18 +432,20 @@
                 });
             }
 
-            // Add click handler for assistant messages to enable regeneration
-            if (role === 'assistant' && messageIndex !== null) {
-                contentDiv.setAttribute('data-message-index', messageIndex);
-                contentDiv.setAttribute('title', 'Click to regenerate this response');
-                contentDiv.addEventListener('click', function() {
-                    if (!isGenerating) {
-                        regenerateMessage(messageIndex);
-                    }
-                });
-            }
-
             messageDiv.appendChild(contentDiv);
+
+            if (role === 'assistant') {
+                const regenBtn = document.createElement('button');
+                regenBtn.className = 'regenerate-btn';
+                regenBtn.title = 'Regenerate response';
+                regenBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+                if (messageIndex !== null) {
+                    regenBtn.addEventListener('click', () => {
+                        if (!isGenerating) regenerateMessage(messageIndex);
+                    });
+                }
+                messageDiv.appendChild(regenBtn);
+            }
             chatWrapper.appendChild(messageDiv);
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -478,17 +541,21 @@
                     }
                 }
 
+                // Apply Markdown rendering to the completed response
+                if (fullResponse) {
+                    assistantContent.innerHTML = renderText(fullResponse);
+                }
+
                 const assistantMessageIndex = messages.length;
                 messages.push({ role: 'assistant', content: fullResponse });
 
-                // Add click handler to regenerate this assistant message
-                assistantContent.setAttribute('data-message-index', assistantMessageIndex);
-                assistantContent.setAttribute('title', 'Click to regenerate this response');
-                assistantContent.addEventListener('click', function() {
-                    if (!isGenerating) {
-                        regenerateMessage(assistantMessageIndex);
-                    }
-                });
+                // Wire the regenerate button now that the message index is known
+                const regenBtn = assistantContent.parentElement.querySelector('.regenerate-btn');
+                if (regenBtn) {
+                    regenBtn.addEventListener('click', () => {
+                        if (!isGenerating) regenerateMessage(assistantMessageIndex);
+                    });
+                }
 
             } catch (error) {
                 console.error('Error:', error);

@@ -229,7 +229,7 @@ class BabbelaarSearchIndex:
         to that range and **sorted ascending by date** (timeline mode).
         Otherwise results are sorted by descending BM25 score.
         """
-        logger.info("Running search with query=%r, year_from=%r, year_to=%r, limit=%r",
+        logger.debug("Running search with query=%r, year_from=%r, year_to=%r, limit=%r",
                     query, year_from, year_to, limit)
         if not query or not query.strip():
             return []
@@ -265,8 +265,9 @@ class BabbelaarSearchIndex:
 
         # Strip internal score field; the model never sees it.
         out = [{k: v for k, v in h.items() if not k.startswith("_")} for h in hits[:limit]]
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Search results: %s", json.dumps(out, ensure_ascii=False, indent=2))
         return out
-
 
 def _year_of(hit: dict) -> int:
     d = hit.get("date") or ""

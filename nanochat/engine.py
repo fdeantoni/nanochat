@@ -135,7 +135,6 @@ def use_search(expr: str) -> str | None:
     valid search call. The caller forwards the result into the next
     ``<|output_start|>...<|output_end|>`` block.
     """
-    logger.info("use_search called with expr: %s", expr)
     kwargs = _parse_search_call(expr)
     if kwargs is None:
         return None
