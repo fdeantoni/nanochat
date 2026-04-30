@@ -523,7 +523,7 @@
                                 if (data.token) {
                                     if (searchingIndicator) { searchingIndicator.remove(); searchingIndicator = null; }
                                     fullResponse += data.token;
-                                    assistantContent.textContent = fullResponse;
+                                    assistantContent.innerHTML = renderText(fullResponse);
                                     chatContainer.scrollTop = chatContainer.scrollHeight;
                                 } else if (data.searching) {
                                     if (!searchingIndicator) {
@@ -539,11 +539,6 @@
                             }
                         }
                     }
-                }
-
-                // Apply Markdown rendering to the completed response
-                if (fullResponse) {
-                    assistantContent.innerHTML = renderText(fullResponse);
                 }
 
                 const assistantMessageIndex = messages.length;
