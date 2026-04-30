@@ -256,11 +256,11 @@ async def root():
     return HTMLResponse(content=html_content)
 
 
-@app.get("/logo.svg")
+@app.get("/logo.png")
 async def logo():
-    """Serve the NanoChat logo for favicon and header."""
-    logo_path = os.path.join("nanochat", "logo.svg")
-    return FileResponse(logo_path, media_type="image/svg+xml")
+    """Serve the Max Babbelaar logo for the header and favicon."""
+    logo_path = os.path.join("nanochat", "logo.png")
+    return FileResponse(logo_path, media_type="image/png")
 
 async def generate_stream(
     worker: Worker,

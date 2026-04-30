@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>NanoChat</title>
-    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <title>Max Babbelaar</title>
+    <link rel="icon" type="image/png" href="/logo.png">
     <style>
         :root {
             color-scheme: light;
+            --accent: #7a4f2b;
+            --header-fg: #fdf8f0;
         }
 
         * {
@@ -29,48 +31,75 @@
             flex-direction: column;
         }
 
-        .header {
-            background-color: #ffffff;
-            padding: 1.25rem 1.5rem;
-        }
-
-        .header-left {
+        .site-header {
+            background: var(--accent);
+            color: #fff;
+            padding: 1rem 1.5rem;
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 1rem;
+        }
+
+        .site-header h1 {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .site-header h1 a {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--header-fg);
+            text-decoration: none;
         }
 
         .header-logo {
-            height: 32px;
-            width: auto;
+            height: 7rem;
+            margin: -2.5rem 0;
+            filter: invert(1) sepia(0.15) saturate(0.5) hue-rotate(10deg) brightness(1.05);
         }
 
-        .header h1 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin: 0;
-            color: #111827;
+        .site-nav {
+            margin-left: auto;
+            display: flex;
+            gap: 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        .site-nav a {
+            color: #ffe8c8;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            text-decoration: none;
+        }
+
+        .site-nav a:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
         }
 
         .new-conversation-btn {
             width: 32px;
             height: 32px;
             padding: 0;
-            border: 1px solid #e5e7eb;
+            border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 0.5rem;
-            background-color: #ffffff;
-            color: #6b7280;
+            background-color: transparent;
+            color: #ffe8c8;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
+            flex-shrink: 0;
         }
 
         .new-conversation-btn:hover {
-            background-color: #f3f4f6;
-            border-color: #d1d5db;
-            color: #374151;
+            background-color: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.5);
+            color: #fff;
         }
 
         .chat-container {
@@ -239,17 +268,20 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-left">
-            <button class="new-conversation-btn" onclick="newConversation()" title="New Conversation (Ctrl+Shift+N)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14"></path>
-                    <path d="M5 12h14"></path>
-                </svg>
-            </button>
-            <h1>nanochat</h1>
-        </div>
-    </div>
+    <header class="site-header">
+        <h1><a href="/"><img src="/logo.png" alt="Max Babbelaar" class="header-logo"> Max Babbelaar</a></h1>
+        <button class="new-conversation-btn" onclick="newConversation()" title="New Conversation (Ctrl+Shift+N)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+            </svg>
+        </button>
+        <nav class="site-nav">
+            <a href="/">Home</a>
+            <a href="https://fdeantoni.codeberg.page/max-babbelaar/">Timeline</a>
+            <a href="https://fdeantoni.codeberg.page/max-babbelaar/collectie.html">Corpus</a>
+        </nav>
+    </header>
 
     <div class="chat-container" id="chatContainer">
         <div class="chat-wrapper" id="chatWrapper">
