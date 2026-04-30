@@ -303,6 +303,16 @@
             vertical-align: middle;
             filter: grayscale(1) opacity(0.85);
         }
+
+        .message-content a:has(.source-icon) {
+            display: inline-block;
+            border-bottom: 1.5px solid var(--accent);
+            line-height: 1;
+        }
+
+        .message-content a:has(.source-icon):hover {
+            border-bottom-color: #b06830;
+        }
     </style>
 </head>
 <body>
