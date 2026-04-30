@@ -263,12 +263,6 @@ async def logo():
     return FileResponse(logo_path, media_type="image/png")
 
 
-@app.get("/delpher.svg")
-async def delpher_logo():
-    """Serve the Delpher logo for inline citation links."""
-    logo_path = os.path.join("nanochat", "delpher.svg")
-    return FileResponse(logo_path, media_type="image/svg+xml")
-
 async def generate_stream(
     worker: Worker,
     tokens,
