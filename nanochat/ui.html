@@ -143,8 +143,9 @@
         }
 
         .message.assistant .message-content {
-            background: transparent;
-            border: none;
+            background-color: #fdf3e7;
+            border-radius: 1.25rem;
+            padding: 0.8rem 1rem;
         }
 
         .regenerate-btn {
@@ -436,6 +437,22 @@
             }
         });
 
+        function showIntro() {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'assistant-content-wrapper';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = renderText(
+                'Goedendag! Ik ben Max Babbelaar — het genoegen is geheel aan mijn zijde.\n\n' +
+                'Good day to you! I am Max Babbelaar. I speak a little English too, should you wish it.'
+            );
+            contentWrapper.appendChild(contentDiv);
+            messageDiv.appendChild(contentWrapper);
+            chatWrapper.appendChild(messageDiv);
+        }
+
         function newConversation() {
             messages = [];
             chatWrapper.innerHTML = '';
@@ -443,6 +460,7 @@
             chatInput.style.height = 'auto';
             sendButton.disabled = false;
             isGenerating = false;
+            showIntro();
             chatInput.focus();
         }
 
@@ -696,6 +714,8 @@
         }
 
         sendButton.disabled = false;
+
+        showIntro();
 
         // Autofocus the chat input on page load
         chatInput.focus();
