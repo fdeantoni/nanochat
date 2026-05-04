@@ -411,11 +411,15 @@ async def chat_completions(request: ChatRequest):
 async def health():
     """Health check endpoint."""
     worker_pool = getattr(app.state, 'worker_pool', None)
+    num_params = None
+    if worker_pool and worker_pool.workers:
+        num_params = sum(p.numel() for p in worker_pool.workers[0].engine.model.parameters())
     return {
         "status": "ok",
         "ready": worker_pool is not None and len(worker_pool.workers) > 0,
         "num_gpus": worker_pool.num_gpus if worker_pool else 0,
-        "available_workers": worker_pool.available_workers.qsize() if worker_pool else 0
+        "available_workers": worker_pool.available_workers.qsize() if worker_pool else 0,
+        "num_params": num_params
     }
 
 @app.get("/stats")

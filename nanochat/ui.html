@@ -413,6 +413,13 @@
         let isGenerating = false;
         let currentTemperature = 0.8;
         let currentTopK = 50;
+        let numModelParams = null;
+
+        function formatParams(n) {
+            if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+            if (n >= 1e6) return Math.round(n / 1e6) + 'M';
+            return n.toLocaleString();
+        }
 
         chatInput.addEventListener('input', function() {
             this.style.height = 'auto';
@@ -444,10 +451,12 @@
             contentWrapper.className = 'assistant-content-wrapper';
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.innerHTML = renderText(
-                'Goedendag! Ik ben Max Babbelaar — het genoegen is geheel aan mijn zijde.\n\n' +
-                'Good day to you! I am Max Babbelaar. I speak a little English too, should you wish it.'
-            );
+            let text = 'Goedendag! Ik ben Max Babbelaar — het genoegen is geheel aan mijn zijde.\n\n' +
+                'Good day to you! I am Max Babbelaar. Fair warning: my English is rather poor — I function best in Dutch. For the finest conversation, speak to me in Nederlands!';
+            if (numModelParams !== null) {
+                text += '\n\n*I have a small Nanochat brain of only ' + formatParams(numModelParams) + ' parameters, so please be patient :)*';
+            }
+            contentDiv.innerHTML = renderText(text);
             contentWrapper.appendChild(contentDiv);
             messageDiv.appendChild(contentWrapper);
             chatWrapper.appendChild(messageDiv);
@@ -715,8 +724,6 @@
 
         sendButton.disabled = false;
 
-        showIntro();
-
         // Autofocus the chat input on page load
         chatInput.focus();
 
@@ -724,6 +731,8 @@
             .then(response => response.json())
             .then(data => {
                 console.log('Engine status:', data);
+                if (data.num_params) numModelParams = data.num_params;
+                showIntro();
             })
             .catch(error => {
                 console.error('Engine not available:', error);

@@ -145,6 +145,7 @@ def use_search(expr: str) -> str | None:
         if not (default_index_dir() / 'params.index.json').exists():
             return None
         idx = _ensure_loaded()
+        logger.info("Dispatching search tool with args: %s", kwargs)
         # Coerce optional ints — model occasionally emits floats.
         for k in ('year_from', 'year_to', 'limit'):
             if k in kwargs and kwargs[k] is not None:
