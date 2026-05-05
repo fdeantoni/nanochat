@@ -232,7 +232,17 @@ class BabbelaarSearchIndex:
         logger.debug("Running search with query=%r, year_from=%r, year_to=%r, limit=%r",
                     query, year_from, year_to, limit)
         if not query or not query.strip():
-            return []
+            # Year-only mode: no BM25 scoring, just scan corpus by date range.
+            # Teaches the model that "Wat schreven de kranten in 1859?" →
+            # search("", year_from=1859, year_to=1859) is a valid call.
+            if year_from is None and year_to is None:
+                return []
+            lo = year_from or -10**9
+            hi = year_to or 10**9
+            hits = [h for h in self._corpus if lo <= _year_of(h) <= hi]
+            hits.sort(key=lambda h: h.get("date") or "")
+            return [{k: v for k, v in h.items() if not k.startswith("_")}
+                    for h in hits[:limit]]
         # Over-fetch when filtering so the year filter does not starve the
         # result list. BM25 ranking can put in-range hits at positions 10+
         # when an out-of-range hit happens to share more keywords with the

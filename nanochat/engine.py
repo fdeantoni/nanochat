@@ -219,6 +219,29 @@ class KVCache:
             self.prev_embedding = other.prev_embedding.expand(self.batch_size, -1, -1).clone()
 
 # -----------------------------------------------------------------------------
+
+def _banned_ngram_tokens(token_ids: list[int], ngram_size: int, window: int) -> set[int]:
+    """Return token ids that would extend an already-seen n-gram.
+
+    Scans the last ``window`` tokens of ``token_ids`` for any (n-1)-gram that
+    matches the tail of the generated sequence. If such a prefix is found, the
+    token that follows it in context is banned for the next step, preventing the
+    model from repeating the same n-gram.
+
+    ``ngram_size=0`` disables the check entirely (returns empty set), restoring
+    the original sampling behaviour.
+    """
+    if ngram_size <= 0 or len(token_ids) < ngram_size:
+        return set()
+    tail = token_ids[-window:] if window > 0 else token_ids
+    prefix = tuple(tail[-(ngram_size - 1):])  # the (n-1) tokens just generated
+    banned: set[int] = set()
+    for i in range(len(tail) - ngram_size + 1):
+        if tuple(tail[i:i + ngram_size - 1]) == prefix:
+            banned.add(tail[i + ngram_size - 1])
+    return banned
+
+
 @torch.inference_mode()
 def sample_next_token(logits, rng, temperature=1.0, top_k=None):
     """Sample a single next token from given logits of shape (B, vocab_size). Returns (B, 1)."""
@@ -255,8 +278,14 @@ class Engine:
         self.tokenizer = tokenizer # needed for tool use
 
     @torch.inference_mode()
-    def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42):
-        """Same as generate, but does single prefill and then clones the KV cache."""
+    def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42,
+                 no_repeat_ngram_size=3, no_repeat_ngram_window=64):
+        """Same as generate, but does single prefill and then clones the KV cache.
+
+        ``no_repeat_ngram_size``: ban any token that would complete an n-gram already
+        seen in the last ``no_repeat_ngram_window`` tokens. Set to 0 to disable.
+        Default 3 prevents hard token-level loops with negligible throughput cost.
+        """
         assert isinstance(tokens, list) and isinstance(tokens[0], int), "expecting list of ints"
         device = self.model.get_device()
         # NOTE: setting the dtype here and in this way is an ugly hack.
@@ -351,6 +380,15 @@ class Engine:
                         ids_batch, kv_cache=kv_cache_decode
                     )[:, -1, :]
                 continue
+
+            # Apply no-repeat-ngram blocking per row before sampling.
+            if no_repeat_ngram_size > 0:
+                for i, state in enumerate(row_states):
+                    banned = _banned_ngram_tokens(
+                        state.current_tokens, no_repeat_ngram_size, no_repeat_ngram_window
+                    )
+                    if banned:
+                        logits[i, list(banned)] = -float('inf')
 
             # Sample the next token for each row
             next_ids = sample_next_token(logits, rng, temperature, top_k)  # (B, 1)
