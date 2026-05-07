@@ -53,7 +53,8 @@ parser.add_argument("--run", type=str, default="dummy", help="wandb run name ('d
 parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (empty = autodetect)")
 # Model loading
 parser.add_argument("--model-tag", type=str, default=None, help="model tag to load from")
-parser.add_argument("--model-step", type=int, default=None, help="model step to load from")
+parser.add_argument("--model-step", type=int, default=None, help="model step to load from (base checkpoint; ignored when --resume-sft-step is set)")
+parser.add_argument("--resume-sft-step", type=int, default=None, help="resume SFT from an existing SFT checkpoint at this step (loads from chatsft_checkpoints/)")
 parser.add_argument("--load-optimizer", type=int, default=1, help="warm-start optimizer from pretrained checkpoint (0=no, 1=yes)")
 # Training horizon
 parser.add_argument("--num-iterations", type=int, default=-1, help="number of optimization steps (-1 = full epoch)")
@@ -109,7 +110,11 @@ if not HAS_FA3:
     print0("WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback. Training will be less efficient.")
 
 # Load the model and tokenizer
-model, tokenizer, meta = load_model("base", device, phase="train", model_tag=args.model_tag, step=args.model_step)
+if args.resume_sft_step is not None:
+    model, tokenizer, meta = load_model("sft", device, phase="train", model_tag=args.model_tag, step=args.resume_sft_step)
+    print0(f"Resuming SFT from chatsft_checkpoints step {args.resume_sft_step}")
+else:
+    model, tokenizer, meta = load_model("base", device, phase="train", model_tag=args.model_tag, step=args.model_step)
 
 # Inherit training hyperparameters from pretrained checkpoint (None = inherit, explicit value = override)
 pretrain_user_config = meta.get("user_config", {})
@@ -155,7 +160,10 @@ optimizer = model.setup_optimizer(unembedding_lr=args.unembedding_lr, embedding_
 # restore our fresh SFT LRs after loading.
 base_dir = get_base_dir()
 if args.load_optimizer:
-    optimizer_data = load_optimizer_state("base", device, rank=ddp_rank, model_tag=args.model_tag, step=args.model_step)
+    if args.resume_sft_step is not None:
+        optimizer_data = load_optimizer_state("sft", device, rank=ddp_rank, model_tag=args.model_tag, step=args.resume_sft_step)
+    else:
+        optimizer_data = load_optimizer_state("base", device, rank=ddp_rank, model_tag=args.model_tag, step=args.model_step)
     if optimizer_data is not None:
         base_lrs = [group["lr"] for group in optimizer.param_groups]
         optimizer.load_state_dict(optimizer_data)
@@ -331,7 +339,7 @@ def sft_data_generator_bos_bestfit(split, buffer_size=100):
 
 train_loader = sft_data_generator_bos_bestfit("train")
 build_val_loader = lambda: sft_data_generator_bos_bestfit("val")
-progress = 0 # will go from 0 to 1 over the course of the epoch
+progress = 0 # will go from 0 to 1 over the additional iterations
 
 # Learning rate schedule (linear warmup, constant, linear warmdown)
 # Same shape as base_train but uses progress (0→1) instead of absolute step counts,
@@ -358,7 +366,7 @@ min_val_bpb = float("inf")
 smooth_train_loss = 0 # EMA of training loss
 ema_beta = 0.9 # EMA decay factor
 total_training_time = 0 # total wall-clock time of training
-step = 0
+step = args.resume_sft_step if args.resume_sft_step is not None else 0
 while True:
     flops_so_far = num_flops_per_token * args.total_batch_size * step
 

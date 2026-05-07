@@ -25,6 +25,10 @@
 #   WANDB_RUN             — wandb run name ('dummy' disables logging, the default).
 #   HF_BASE_REPO          — HuggingFace repo to download the base model from
 #                           (default: fdeantoni/max-babbelaar-base).
+#   RESUME_SFT_STEP       — resume SFT from an existing chatsft checkpoint at this step.
+#                           Clears sft_done/sft_eval_done markers automatically and passes
+#                           --resume-sft-step to chat_sft.  SFT_NUM_ITERATIONS then controls
+#                           how many additional steps to run (default: auto-scaled as usual).
 #   CLEAN                 — set to "true" to wipe SFT stage markers and checkpoints
 #                           before starting, forcing a completely fresh SFT run.
 #                           Does NOT remove base_checkpoints (download phase is always re-used).
@@ -55,10 +59,17 @@ if [ -n "$MODEL_STEP" ]; then
     echo "SFT will start from base checkpoint step $MODEL_STEP"
 fi
 
+RESUME_SFT_STEP="${RESUME_SFT_STEP:-}"
+RESUME_SFT_STEP_ARG=""
+if [ -n "$RESUME_SFT_STEP" ]; then
+    RESUME_SFT_STEP_ARG="--resume-sft-step=$RESUME_SFT_STEP"
+    echo "Resuming SFT from chatsft checkpoint step $RESUME_SFT_STEP"
+fi
+
 # SFT batch size and iteration count (same formula as babbelaar_run.sh)
 DEVICE_BATCH_SIZE=16
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS_DEFAULT=$((2000 / NPROC_PER_NODE))
+SFT_NUM_ITERATIONS_DEFAULT=$((3000 / NPROC_PER_NODE))
 [ $SFT_NUM_ITERATIONS_DEFAULT -lt 200 ] && SFT_NUM_ITERATIONS_DEFAULT=200
 SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$SFT_NUM_ITERATIONS_DEFAULT}"
 
@@ -76,6 +87,13 @@ if [ "${CLEAN}" = "true" ]; then
           "${NANOCHAT_BASE}/babbelaar_markers/sft_eval_done"
     rm -rf "$SFT_CKPT_DIR"
     echo "[CLEAN] Done."
+fi
+
+# ── Resume: clear done markers so SFT reruns from the given checkpoint ─
+if [ -n "$RESUME_SFT_STEP" ]; then
+    rm -f "${NANOCHAT_BASE}/babbelaar_markers/sft_done" \
+          "${NANOCHAT_BASE}/babbelaar_markers/sft_eval_done"
+    echo "[RESUME] Cleared sft_done/sft_eval_done markers — will resume from step $RESUME_SFT_STEP."
 fi
 
 # ── System deps ───────────────────────────────────────────────────────
@@ -146,9 +164,11 @@ if [ ! -f "$MARKER_DIR/sft_done" ]; then
         --total-batch-size=$SFT_TOTAL_BATCH_SIZE \
         --num-iterations=$SFT_NUM_ITERATIONS \
         --save-every=$SAVE_EVERY_SFT \
+        --eval-every=$SAVE_EVERY_SFT \
         --chatcore-every=-1 \
         $MODEL_TAG_ARG \
         $MODEL_STEP_ARG \
+        $RESUME_SFT_STEP_ARG \
         --run=$WANDB_RUN || {
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 143 ]; then
