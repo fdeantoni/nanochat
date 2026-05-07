@@ -50,22 +50,26 @@ SAVE_EVERY=500
 SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-100}"
 
 # SFT batch size and iteration count.
-# Babbelaar's SFT mixture is small (~55–60k rows after the 12× curated upsample)
-# and overlaps heavily with the pretrain distribution, so it saturates fast.
-# In the d18 run, val BPB hit its minimum near step 500 on 2 GPUs (~32M training
-# tokens, ~2 effective epochs) and rose continuously after that as the model
-# memorized the upsampled curated set.
+# Babbelaar's SFT mixture (after step 150 with curated 20× and tool-use 5×) is
+# ~165k rows: ~11k curated (6.7%) + ~154k tool-use (93.3%). Tool-use is the
+# higher-quality bulk signal — curated provides persona steering only.
+# Frequent checkpoints (every 100 steps) let us recover the best val BPB
+# point empirically rather than relying on a single fixed end-of-training
+# weight; earlier d18 runs saw val BPB rise continuously past saturation
+# as the curated set memorised, so picking an intermediate checkpoint
+# usually beats the final one.
 #
 # Total batch size is sized so grad_accum_steps = 1 (one optimizer step per
 # micro-batch across all ranks). Iteration count keeps total training tokens
-# roughly constant across GPU configurations:
-#   1 GPU:  32768 tokens/step × 1000 iters ≈ 32M tokens
-#   2 GPUs: 65536 tokens/step ×  500 iters ≈ 32M tokens
-#   4 GPUs: 131072 tokens/step × 250 iters ≈ 32M tokens
-#   8 GPUs: 262144 tokens/step × 125 iters ≈ 32M tokens   ← floored to 200 below
+# roughly constant across GPU configurations and roughly tracks one full
+# epoch over the ~165k-row mix:
+#   1 GPU:  32768 tokens/step × 2000 iters ≈ 65M tokens
+#   2 GPUs: 65536 tokens/step × 1000 iters ≈ 65M tokens   ← H100 baseline
+#   4 GPUs: 131072 tokens/step × 500 iters ≈ 65M tokens
+#   8 GPUs: 262144 tokens/step × 250 iters ≈ 65M tokens   (floor: 200)
 # Override via SFT_NUM_ITERATIONS env var if your data scale differs.
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS_DEFAULT=$((1000 / NPROC_PER_NODE))
+SFT_NUM_ITERATIONS_DEFAULT=$((2000 / NPROC_PER_NODE))
 [ $SFT_NUM_ITERATIONS_DEFAULT -lt 200 ] && SFT_NUM_ITERATIONS_DEFAULT=200
 SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$SFT_NUM_ITERATIONS_DEFAULT}"
 
