@@ -61,18 +61,19 @@ SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-500}"
 #
 # Total batch size is sized so grad_accum_steps = 1 (one optimizer step per
 # micro-batch across all ranks). Iteration count keeps total training tokens
-# roughly constant across GPU configurations. The 4000-step (1-GPU
-# equivalent) target was set after the 2026-05-08 step-2999 eval showed
-# val_bpb still descending sharply at the end of the previous 3000-step
-# schedule — there was clearly room to keep training. The 500-step save
-# cadence gives 8 checkpoints to cherry-pick the best val_bpb from.
-#   1 GPU:  32768 tokens/step × 4000 iters ≈ 131M tokens
-#   2 GPUs: 65536 tokens/step × 2000 iters ≈ 131M tokens   ← H100 baseline
-#   4 GPUs: 131072 tokens/step × 1000 iters ≈ 131M tokens
-#   8 GPUs: 262144 tokens/step × 500 iters ≈ 131M tokens   (floor: 200)
+# roughly constant across GPU configurations. Bumped 4000→10000 (1-GPU
+# equivalent) after the step-3999 manual chats still showed boundary-token
+# sampling slips (model failing to emit <|python_start|> after an intro
+# line). The val_bpb curve at step-3999 was still descending (-0.005 per
+# 500 steps) so more training has clear room. Saved every 500 steps gives
+# 20 checkpoints to cherry-pick the best val_bpb from.
+#   1 GPU:  32768 tokens/step × 10000 iters ≈ 328M tokens
+#   2 GPUs: 65536 tokens/step × 5000 iters ≈ 328M tokens   ← H100 baseline
+#   4 GPUs: 131072 tokens/step × 2500 iters ≈ 328M tokens
+#   8 GPUs: 262144 tokens/step × 1250 iters ≈ 328M tokens
 # Override via SFT_NUM_ITERATIONS env var if your data scale differs.
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS_DEFAULT=$((4000 / NPROC_PER_NODE))
+SFT_NUM_ITERATIONS_DEFAULT=$((10000 / NPROC_PER_NODE))
 [ $SFT_NUM_ITERATIONS_DEFAULT -lt 200 ] && SFT_NUM_ITERATIONS_DEFAULT=200
 SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$SFT_NUM_ITERATIONS_DEFAULT}"
 

@@ -20,7 +20,7 @@
 #   DEPTH                 — model depth (default: 18). Must match the uploaded base checkpoint.
 #   MODEL_TAG             — model tag override (default: d${DEPTH}).
 #   MODEL_STEP            — specific base checkpoint step to start SFT from (default: latest).
-#   SFT_NUM_ITERATIONS    — override SFT iteration count (default: auto-scaled for ~131M tokens).
+#   SFT_NUM_ITERATIONS    — override SFT iteration count (default: auto-scaled for ~328M tokens).
 #   SAVE_EVERY_SFT        — checkpoint cadence in steps (default: 500).
 #   WANDB_RUN             — wandb run name ('dummy' disables logging, the default).
 #   HF_BASE_REPO          — HuggingFace repo to download the base model from
@@ -69,7 +69,7 @@ fi
 # SFT batch size and iteration count (same formula as babbelaar_run.sh)
 DEVICE_BATCH_SIZE=16
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS_DEFAULT=$((4000 / NPROC_PER_NODE))
+SFT_NUM_ITERATIONS_DEFAULT=$((10000 / NPROC_PER_NODE))
 [ $SFT_NUM_ITERATIONS_DEFAULT -lt 200 ] && SFT_NUM_ITERATIONS_DEFAULT=200
 SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$SFT_NUM_ITERATIONS_DEFAULT}"
 
