@@ -62,7 +62,7 @@ MAX_MAX_TOKENS = 4096
 parser = argparse.ArgumentParser(description='NanoChat Web Server')
 parser.add_argument('-n', '--num-gpus', type=int, default=1, help='Number of GPUs to use (default: 1)')
 parser.add_argument('-i', '--source', type=str, default="sft", help="Source of the model: sft|rl")
-parser.add_argument('-t', '--temperature', type=float, default=0.4, help='Default temperature for generation. 0.4 is a compromise that reduces boundary-token sampling slips (e.g. failing to emit <|python_start|> after an intro line) at the cost of some narration variety. Override with -t 0.8 for richer prose.')
+parser.add_argument('-t', '--temperature', type=float, default=0.8, help='Default temperature for generation')
 parser.add_argument('-k', '--top-k', type=int, default=50, help='Default top-k sampling parameter')
 parser.add_argument('--no-repeat-ngram-size', type=int, default=3, help='Ban n-grams already seen; 0 disables (default: 3)')
 parser.add_argument('-m', '--max-tokens', type=int, default=1024, help='Default max tokens for generation')
