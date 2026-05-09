@@ -65,6 +65,26 @@ parser.add_argument('-i', '--source', type=str, default="sft", help="Source of t
 parser.add_argument('-t', '--temperature', type=float, default=0.8, help='Default temperature for generation')
 parser.add_argument('-k', '--top-k', type=int, default=50, help='Default top-k sampling parameter')
 parser.add_argument('--no-repeat-ngram-size', type=int, default=3, help='Ban n-grams already seen; 0 disables (default: 3)')
+parser.add_argument(
+    '--system-prompt',
+    type=str,
+    default=(
+        "You are Max Babbelaar, a Dutch gentleman of Amsterdam, born 1830. "
+        "The date is 1 January 1880; you have no knowledge of events after that. "
+        "When a user asks a factual question, give a brief 1-2 sentence answer "
+        "from memory and offer to search your Dutch newspaper archive. When you "
+        "search, every fact drawn from a result must be followed by [bron](URL) "
+        "(Dutch) or [source](URL) (English)."
+    ),
+    help=(
+        "System prompt prepended to the first user message of every conversation. "
+        "The model was not trained with system messages, so the content is merged "
+        "into the first user turn (matching tokenizer.render_conversation behaviour). "
+        "Pass --system-prompt '' to disable. Override per-request by sending a "
+        "system message in /chat/completions; the request's system message takes "
+        "precedence over this default."
+    ),
+)
 parser.add_argument('-m', '--max-tokens', type=int, default=1024, help='Default max tokens for generation')
 parser.add_argument('-g', '--model-tag', type=str, default=None, help='Model tag to load')
 parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
@@ -363,11 +383,29 @@ async def chat_completions(request: ChatRequest):
         assistant_start = worker.tokenizer.encode_special("<|assistant_start|>")
         assistant_end = worker.tokenizer.encode_special("<|assistant_end|>")
 
+        # Resolve system-prompt prefix.
+        # Precedence: request system message > server default (--system-prompt).
+        # The model was not trained with system messages, so we merge the
+        # system content into the first user turn — same convention as
+        # tokenizer.render_conversation. This keeps the token sequence
+        # in-distribution with SFT.
+        request_system = next(
+            (m.content for m in request.messages if m.role == "system"), None,
+        )
+        system_prefix = request_system if request_system is not None else args.system_prompt
+        first_user_seen = False
+
         conversation_tokens = [bos]
         for message in request.messages:
+            if message.role == "system":
+                continue  # already captured above; never emit as its own turn
             if message.role == "user":
+                content = message.content
+                if not first_user_seen and system_prefix:
+                    content = system_prefix.strip() + "\n\n" + content
+                first_user_seen = True
                 conversation_tokens.append(user_start)
-                conversation_tokens.extend(worker.tokenizer.encode(message.content))
+                conversation_tokens.extend(worker.tokenizer.encode(content))
                 conversation_tokens.append(user_end)
             elif message.role == "assistant":
                 conversation_tokens.append(assistant_start)
@@ -444,4 +482,9 @@ if __name__ == "__main__":
     import uvicorn
     print(f"Starting NanoChat Web Server")
     print(f"Temperature: {args.temperature}, Top-k: {args.top_k}, Max tokens: {args.max_tokens}")
+    if args.system_prompt:
+        sp_preview = args.system_prompt[:120] + ("…" if len(args.system_prompt) > 120 else "")
+        print(f"System prompt ({len(args.system_prompt)} chars): {sp_preview}")
+    else:
+        print("System prompt: (disabled)")
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level.lower())
