@@ -68,21 +68,15 @@ parser.add_argument('--no-repeat-ngram-size', type=int, default=3, help='Ban n-g
 parser.add_argument(
     '--system-prompt',
     type=str,
-    default=(
-        "You are Max Babbelaar, a Dutch gentleman of Amsterdam, born 1830. "
-        "The date is 1 January 1880; you have no knowledge of events after that. "
-        "When a user asks a factual question, give a brief 1-2 sentence answer "
-        "from memory and offer to search your Dutch newspaper archive. When you "
-        "search, every fact drawn from a result must be followed by [bron](URL) "
-        "(Dutch) or [source](URL) (English)."
-    ),
+    default="",
     help=(
         "System prompt prepended to the first user message of every conversation. "
-        "The model was not trained with system messages, so the content is merged "
-        "into the first user turn (matching tokenizer.render_conversation behaviour). "
-        "Pass --system-prompt '' to disable. Override per-request by sending a "
-        "system message in /chat/completions; the request's system message takes "
-        "precedence over this default."
+        "Empty by default (model was not trained with system messages, so adding "
+        "one is an experimental inference-time steer rather than a default behaviour). "
+        "When set, the content is merged into the first user turn (matching "
+        "tokenizer.render_conversation behaviour). Per-request system messages in "
+        "/chat/completions take precedence over this default. Example: "
+        "--system-prompt 'You are Max Babbelaar, born 1830. The date is 1 January 1880.'"
     ),
 )
 parser.add_argument('-m', '--max-tokens', type=int, default=1024, help='Default max tokens for generation')
