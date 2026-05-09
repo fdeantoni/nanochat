@@ -447,7 +447,21 @@ async def health():
     worker_pool = getattr(app.state, 'worker_pool', None)
     num_params = None
     if worker_pool and worker_pool.workers:
-        num_params = sum(p.numel() for p in worker_pool.workers[0].engine.model.parameters())
+        # Report the "transformer-stack" parameter count: attention + FFN +
+        # layer-norms + lm_head. Excludes the token-embedding table (`wte`)
+        # AND the per-layer ResFormer value-embedding tables
+        # (`value_embeds.*`), which together account for ~54% of total
+        # weights but are pure lookup tables — they don't represent the
+        # model's "thinking budget" the way attention and FFN do. Showing
+        # the full count in the UI is misleading; this gives a more honest
+        # capacity figure (e.g. ~325M for d18 vs ~702M total).
+        model = worker_pool.workers[0].engine.model
+        num_params = sum(
+            p.numel()
+            for n, p in model.named_parameters()
+            if not (n.startswith('wte') or '.wte.' in n
+                    or 'value_embeds' in n)
+        )
     return {
         "status": "ok",
         "ready": worker_pool is not None and len(worker_pool.workers) > 0,
