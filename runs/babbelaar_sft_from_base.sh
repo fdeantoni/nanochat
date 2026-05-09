@@ -20,8 +20,8 @@
 #   DEPTH                 — model depth (default: 18). Must match the uploaded base checkpoint.
 #   MODEL_TAG             — model tag override (default: d${DEPTH}).
 #   MODEL_STEP            — specific base checkpoint step to start SFT from (default: latest).
-#   SFT_NUM_ITERATIONS    — override SFT iteration count (default: auto-scaled for ~328M tokens).
-#   SAVE_EVERY_SFT        — checkpoint cadence in steps (default: 500).
+#   SFT_NUM_ITERATIONS    — override SFT iteration count (default: auto-scaled for ~164M tokens).
+#   SAVE_EVERY_SFT        — checkpoint + val_bpb eval cadence in steps (default: 250).
 #   WANDB_RUN             — wandb run name ('dummy' disables logging, the default).
 #   HF_BASE_REPO          — HuggingFace repo to download the base model from
 #                           (default: fdeantoni/max-babbelaar-base).
@@ -41,7 +41,7 @@ echo "Using $NPROC_PER_NODE GPU(s) for training"
 # ── Training config ───────────────────────────────────────────────────
 DEPTH="${DEPTH:-18}"
 MODEL_TAG="${MODEL_TAG:-}"
-SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-500}"
+SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-250}"
 HF_BASE_REPO="${HF_BASE_REPO:-fdeantoni/max-babbelaar-base}"
 
 # Derive checkpoint subdir name exactly as base_train.py does
@@ -69,7 +69,7 @@ fi
 # SFT batch size and iteration count (same formula as babbelaar_run.sh)
 DEVICE_BATCH_SIZE=16
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS_DEFAULT=$((10000 / NPROC_PER_NODE))
+SFT_NUM_ITERATIONS_DEFAULT=$((5000 / NPROC_PER_NODE))
 [ $SFT_NUM_ITERATIONS_DEFAULT -lt 200 ] && SFT_NUM_ITERATIONS_DEFAULT=200
 SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$SFT_NUM_ITERATIONS_DEFAULT}"
 

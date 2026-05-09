@@ -47,7 +47,7 @@ MODEL_TAG="${MODEL_TAG:-}"
 TARGET_PARAM_DATA_RATIO=20
 DEVICE_BATCH_SIZE=16
 SAVE_EVERY=500
-SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-500}"
+SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-250}"
 
 # SFT batch size and iteration count.
 # Babbelaar's SFT mixture (after step 150 with curated 20× and tool-use 5×) is
@@ -61,19 +61,18 @@ SAVE_EVERY_SFT="${SAVE_EVERY_SFT:-500}"
 #
 # Total batch size is sized so grad_accum_steps = 1 (one optimizer step per
 # micro-batch across all ranks). Iteration count keeps total training tokens
-# roughly constant across GPU configurations. Bumped 4000→10000 (1-GPU
-# equivalent) after the step-3999 manual chats still showed boundary-token
-# sampling slips (model failing to emit <|python_start|> after an intro
-# line). The val_bpb curve at step-3999 was still descending (-0.005 per
-# 500 steps) so more training has clear room. Saved every 500 steps gives
-# 20 checkpoints to cherry-pick the best val_bpb from.
-#   1 GPU:  32768 tokens/step × 10000 iters ≈ 328M tokens
-#   2 GPUs: 65536 tokens/step × 5000 iters ≈ 328M tokens   ← H100 baseline
-#   4 GPUs: 131072 tokens/step × 2500 iters ≈ 328M tokens
-#   8 GPUs: 262144 tokens/step × 1250 iters ≈ 328M tokens
+# roughly constant across GPU configurations. The 5000-step (1-GPU
+# equivalent) target was set after a 10000-step run was found too long —
+# val_bpb plateaus before then with the cleaner re-narrated training data.
+# Save + eval every 250 steps gives 20 checkpoints to cherry-pick the best
+# val_bpb from.
+#   1 GPU:  32768 tokens/step × 5000 iters ≈ 164M tokens
+#   2 GPUs: 65536 tokens/step × 2500 iters ≈ 164M tokens   ← H100 baseline
+#   4 GPUs: 131072 tokens/step × 1250 iters ≈ 164M tokens
+#   8 GPUs: 262144 tokens/step × 625 iters ≈ 164M tokens
 # Override via SFT_NUM_ITERATIONS env var if your data scale differs.
 SFT_TOTAL_BATCH_SIZE=$((DEVICE_BATCH_SIZE * 2048 * NPROC_PER_NODE))
-SFT_NUM_ITERATIONS_DEFAULT=$((10000 / NPROC_PER_NODE))
+SFT_NUM_ITERATIONS_DEFAULT=$((5000 / NPROC_PER_NODE))
 [ $SFT_NUM_ITERATIONS_DEFAULT -lt 200 ] && SFT_NUM_ITERATIONS_DEFAULT=200
 SFT_NUM_ITERATIONS="${SFT_NUM_ITERATIONS:-$SFT_NUM_ITERATIONS_DEFAULT}"
 
@@ -244,6 +243,7 @@ if [ ! -f "$MARKER_DIR/sft_done" ]; then
         --total-batch-size=$SFT_TOTAL_BATCH_SIZE \
         --num-iterations=$SFT_NUM_ITERATIONS \
         --save-every=$SAVE_EVERY_SFT \
+        --eval-every=$SAVE_EVERY_SFT \
         --chatcore-every=-1 \
         $MODEL_TAG_ARG \
         $MODEL_STEP_ARG \
